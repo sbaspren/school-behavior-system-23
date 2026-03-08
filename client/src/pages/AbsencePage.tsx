@@ -181,6 +181,7 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
   const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0 });
   const noorFileRef = useRef<HTMLInputElement>(null);
   const platformFileRef = useRef<HTMLInputElement>(null);
+  const [excelPreview, setExcelPreview] = useState<{ students: { studentNumber?: string; name?: string; absenceType?: string }[]; source: string } | null>(null);
 
   // Excel import handler (Noor + Platform)
   const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>, isPlatform = false) => {
@@ -234,13 +235,22 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
         });
       }
       if (students.length === 0) { showError('لا يوجد طلاب في الملف'); return; }
-      if (!window.confirm(`سيتم استيراد ${students.length} طالب${isPlatform ? ' (منصة مدرستي)' : ' (نور)'}. هل تريد المتابعة؟`)) return;
       const source = isPlatform ? 'platform' : 'noor';
+      setExcelPreview({ students, source });
+    } catch (err: any) { showError('خطأ في الاستيراد: ' + (err?.message || '')); }
+    finally { setImporting(false); e.target.value = ''; }
+  };
+
+  const confirmExcelImport = async () => {
+    if (!excelPreview) return;
+    const { students, source } = excelPreview;
+    setExcelPreview(null);
+    showSuccess('جاري حفظ البيانات...');
+    try {
       const res = await absenceApi.importFromExcel(students, source);
       if (res.data?.data) showSuccess(res.data.data.message || `تم استيراد ${students.length} طالب`);
       onRefresh();
-    } catch (err: any) { showError('خطأ في الاستيراد: ' + (err?.message || '')); }
-    finally { setImporting(false); e.target.value = ''; }
+    } catch (err: any) { showError('خطأ: ' + (err?.message || '')); }
   };
 
   const filtered = useMemo(() => {
@@ -343,11 +353,12 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
     catch { showError('خطأ'); }
   };
 
-  // Print today's absence list
-  const handlePrintToday = () => {
-    if (filtered.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
+  // Print today's absence list (selected only if any selected)
+  const handlePrintToday = (forceAll = false) => {
+    const printRecs = (!forceAll && selected.size > 0) ? filtered.filter(r => selected.has(r.id)) : filtered;
+    if (printRecs.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
     const { hijri, miladi, dayName } = getTodayDates();
-    const sorted = [...filtered].sort((a, b) => `${a.grade}${a.className}`.localeCompare(`${b.grade}${b.className}`, 'ar'));
+    const sorted = [...printRecs].sort((a, b) => `${a.grade}${a.className}`.localeCompare(`${b.grade}${b.className}`, 'ar'));
     let prevClass = '';
     let rows = '';
     sorted.forEach((r, i) => {
@@ -411,7 +422,7 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
         <button onClick={handleSendAll} disabled={bulkSending} style={btnStyle('#25d366')}>
           {bulkSending ? `⏳ ${bulkProgress.sent}/${bulkProgress.total}` : '📱 إرسال للجميع'}
         </button>
-        <button onClick={handlePrintToday} style={btnStyle('#4f46e5', true)}>🖨️ طباعة الكشف</button>
+        <button onClick={() => handlePrintToday(true)} style={btnStyle('#4f46e5', true)}>🖨️ طباعة الكشف</button>
       </div>
 
       {/* Search */}
@@ -511,8 +522,15 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
         <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(31,41,55,0.95)', color: '#fff', padding: '12px 24px', borderRadius: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 16, zIndex: 50, backdropFilter: 'blur(8px)' }}>
           <span>✅ <strong>{selected.size}</strong> محدد</span>
           <span style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.3)' }} />
-          <button onClick={handlePrintToday} style={{ color: '#c4b5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🖨️ طباعة</button>
+          <button onClick={() => handlePrintToday()} style={{ color: '#c4b5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🖨️ طباعة</button>
           <button onClick={handleSendBulk} style={{ color: '#86efac', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📱 إرسال</button>
+          {selected.size === 1 && (() => {
+            const r = filtered.find(x => selected.has(x.id));
+            return r ? (<>
+              <button onClick={() => handlePrintForm('tahood_hodoor', r)} style={{ color: '#fde68a', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📋 تعهد فردي</button>
+              <button onClick={() => handlePrintForm('ehalat_absence', r)} style={{ color: '#93c5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📤 إحالة فردي</button>
+            </>) : null;
+          })()}
           <button onClick={handleDeleteBulk} style={{ color: '#fca5a5', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🗑️ حذف</button>
           <button onClick={() => setSelected(new Set())} style={{ color: 'rgba(255,255,255,0.6)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
         </div>
@@ -563,6 +581,52 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
 
       {/* Delete Confirm */}
       {confirmDelete && <ConfirmModal title="حذف السجل" message={`هل أنت متأكد من حذف سجل ${confirmDelete.studentName}؟`} onConfirm={handleDelete} onCancel={() => setConfirmDelete(null)} />}
+
+      {/* Excel Preview Modal */}
+      {excelPreview && (
+        <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setExcelPreview(null); }}>
+          <div style={{ ...modalBox, maxWidth: 700, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 24px', background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>👁️ معاينة البيانات المستوردة</h3>
+              <button onClick={() => setExcelPreview(null)} style={closeBtn}>✕</button>
+            </div>
+            <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
+              <div style={{ padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                ℹ️ <span style={{ fontSize: 13, fontWeight: 600, color: '#15803d' }}>تم العثور على <strong>{excelPreview.students.length}</strong> طالب في الملف ({excelPreview.source === 'platform' ? 'منصة مدرستي' : 'نظام نور'})</span>
+              </div>
+              <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
+                    <tr>
+                      <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#4b5563', width: 30 }}>#</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#4b5563' }}>الاسم</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#4b5563' }}>الرقم</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#4b5563' }}>النوع</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {excelPreview.students.slice(0, 20).map((s, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '6px 10px', fontSize: 12, color: '#6b7280' }}>{i + 1}</td>
+                        <td style={{ padding: '6px 10px', fontWeight: 600 }}>{s.name}</td>
+                        <td style={{ padding: '6px 10px', fontSize: 12 }}>{s.studentNumber || '-'}</td>
+                        <td style={{ padding: '6px 10px', fontSize: 12 }}>{s.absenceType === 'Period' ? 'حصة' : 'يوم كامل'}</td>
+                      </tr>
+                    ))}
+                    {excelPreview.students.length > 20 && (
+                      <tr><td colSpan={4} style={{ padding: 10, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>... و {excelPreview.students.length - 20} طالب آخر</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style={{ padding: '14px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setExcelPreview(null)} style={{ padding: '8px 16px', color: '#6b7280', background: '#fff', border: '1px solid #d1d5db', borderRadius: 8, cursor: 'pointer' }}>إلغاء</button>
+              <button onClick={confirmExcelImport} style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>💾 استيراد {excelPreview.students.length} طالب</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
@@ -578,6 +642,12 @@ const AdvancedMessageEditor: React.FC<{
   const schoolName = settings?.schoolName || 'المدرسة';
   const [excuseLink, setExcuseLink] = useState('');
   const [loadingLink, setLoadingLink] = useState(false);
+  const [templateSaved, setTemplateSaved] = useState(false);
+
+  // Load saved template
+  const savedTemplate = useMemo(() => {
+    try { return localStorage.getItem('absence_msg_template') || ''; } catch { return ''; }
+  }, []);
 
   const buildMessage = useCallback((withLink: boolean, link: string) => {
     let msg = `📋 *إشعار غياب*\n\nالسلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: *${row.studentName}*\n\nنفيدكم بأن ابنكم *${row.studentName}* غائب اليوم\n📅 ${dayName} - ${hijri}\nالصف: ${row.grade} - الفصل: ${row.className}`;
@@ -588,7 +658,41 @@ const AdvancedMessageEditor: React.FC<{
     return msg;
   }, [row, dayName, hijri, schoolName]);
 
-  const [message, setMessage] = useState(() => buildMessage(false, ''));
+  const [message, setMessage] = useState(() => {
+    if (savedTemplate) {
+      // Replace placeholders in template with actual data
+      return savedTemplate
+        .replace(/\{اسم_الطالب\}/g, row.studentName)
+        .replace(/\{الصف\}/g, row.grade)
+        .replace(/\{الفصل\}/g, row.className)
+        .replace(/\{اليوم\}/g, dayName)
+        .replace(/\{التاريخ\}/g, hijri);
+    }
+    return buildMessage(false, '');
+  });
+  const defaultMsg = useMemo(() => buildMessage(false, ''), [buildMessage]);
+
+  const handleSaveTemplate = () => {
+    // Convert current message back to template by replacing data with placeholders
+    let tmpl = message;
+    const replacements = [
+      { val: row.studentName, key: 'اسم_الطالب' },
+      { val: row.grade, key: 'الصف' },
+      { val: row.className, key: 'الفصل' },
+      { val: dayName, key: 'اليوم' },
+      { val: hijri, key: 'التاريخ' },
+    ];
+    replacements.sort((a, b) => b.val.length - a.val.length);
+    replacements.forEach(r => { if (r.val.trim()) tmpl = tmpl.split(r.val).join(`{${r.key}}`); });
+    try { localStorage.setItem('absence_msg_template', tmpl); setTemplateSaved(true); showSuccess('تم حفظ القالب كافتراضي ✓'); } catch { showError('فشل حفظ القالب'); }
+  };
+
+  const handleResetTemplate = () => {
+    try { localStorage.removeItem('absence_msg_template'); } catch { /* skip */ }
+    setMessage(defaultMsg);
+    setTemplateSaved(false);
+    showSuccess('تم استعادة القالب الافتراضي');
+  };
 
   // Fetch excuse link
   useEffect(() => {
@@ -644,12 +748,19 @@ const AdvancedMessageEditor: React.FC<{
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={14}
             style={{ width: '100%', padding: 12, border: '2px solid #d1d5db', borderRadius: 10, fontSize: 13, lineHeight: 1.7, resize: 'vertical', fontFamily: 'Traditional Arabic, Tahoma, serif', direction: 'rtl', boxSizing: 'border-box' }} />
         </div>
-        <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>إلغاء</button>
-          <button onClick={() => onSend(message)} disabled={sending || !message.trim()} style={{ padding: '8px 20px', background: '#25d366', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1 }}>
-            {sending ? 'جاري الإرسال...' : '📱 إرسال'}
-          </button>
+        <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSaveTemplate} style={{ padding: '6px 12px', background: '#2563eb', color: '#fff', borderRadius: 8, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer' }}>🔖 حفظ كقالب افتراضي</button>
+            <button onClick={handleResetTemplate} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#4b5563', borderRadius: 8, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer' }}>🔄 استعادة</button>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onClose} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>إلغاء</button>
+            <button onClick={() => onSend(message)} disabled={sending || !message.trim()} style={{ padding: '8px 20px', background: '#25d366', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1 }}>
+              {sending ? 'جاري الإرسال...' : '📱 إرسال'}
+            </button>
+          </div>
         </div>
+        {templateSaved && <div style={{ padding: '6px 20px', background: '#eff6ff', borderTop: '1px solid #bfdbfe', fontSize: 11, color: '#2563eb' }}>ℹ️ يتم استخدام قالبك المحفوظ</div>}
       </div>
     </div>
   );
@@ -702,6 +813,29 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
     approved: excuses.filter(e => e.status === 'مقبول').length,
     rejected: excuses.filter(e => e.status === 'مرفوض').length,
   }), [excuses]);
+
+  // Group by day when week filter
+  const groupedByDay = useMemo(() => {
+    if (dateFilter !== 'week') return null;
+    const dayOrder = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+    const days: Record<string, ParentExcuseRow[]> = {};
+    filtered.forEach(e => {
+      let dn = e.day || '';
+      if (!dn) {
+        try {
+          const d = new Date(e.submittedAt || '');
+          if (!isNaN(d.getTime())) dn = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][d.getDay()] || 'غير محدد';
+          else dn = 'غير محدد';
+        } catch { dn = 'غير محدد'; }
+      }
+      if (!days[dn]) days[dn] = [];
+      days[dn].push(e);
+    });
+    const sorted: { day: string; items: ParentExcuseRow[] }[] = [];
+    dayOrder.forEach(d => { if (days[d]) sorted.push({ day: d, items: days[d] }); });
+    Object.keys(days).forEach(k => { if (!dayOrder.includes(k)) sorted.push({ day: k, items: days[k] }); });
+    return sorted;
+  }, [filtered, dateFilter]);
 
   // Days badge
   const getDaysBadge = (e: ParentExcuseRow) => {
@@ -806,62 +940,26 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
           <p style={{ color: '#6b7280', marginTop: 12, fontSize: 16 }}>لا توجد أعذار</p>
           <p style={{ color: '#9ca3af', fontSize: 13 }}>ستظهر هنا الأعذار المقدمة من أولياء الأمور</p>
         </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
-          {filtered.map(excuse => {
-            const isPending = excuse.status === 'معلق';
-            const isApproved = excuse.status === 'مقبول';
-            const statusColor = isPending ? '#f59e0b' : isApproved ? '#22c55e' : '#ef4444';
-            const statusIcon = isPending ? '⏳' : isApproved ? '✅' : '❌';
-            const isParent = excuse.source === 'parent';
-            const daysBadge = getDaysBadge(excuse);
-            return (
-              <div key={excuse.id} onClick={() => setSelectedExcuse(excuse)}
-                style={{ background: '#fff', borderRadius: 14, border: `2px solid ${statusColor}30`, padding: 16, cursor: 'pointer', position: 'relative', transition: 'box-shadow 0.2s' }}>
-                {/* Status icon */}
-                <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 18 }}>{statusIcon}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{excuse.status}</span>
-                </div>
-                {/* Badges */}
-                <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 4 }}>
-                  {daysBadge}
-                  <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: isParent ? '#f3e8ff' : '#f3f4f6', color: isParent ? '#7c3aed' : '#6b7280', border: `1px solid ${isParent ? '#d8b4fe' : '#d1d5db'}` }}>
-                    {isParent ? 'ولي أمر' : 'يومي'}
-                  </span>
-                  {excuse.attachments !== 'لا' && <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>📎 مرفق</span>}
-                </div>
-                {/* Student info */}
-                <div style={{ marginTop: 36, marginBottom: 12 }}>
-                  <h3 style={{ fontWeight: 700, color: '#1f2937', fontSize: 14, lineHeight: 1.4 }}>{excuse.studentName}</h3>
-                  <p style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{excuse.grade} / {excuse.class}</p>
-                </div>
-                {/* Info grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
-                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937' }}>{excuse.absenceDate || '-'}</p>
-                    <p style={{ fontSize: 9, color: '#6b7280' }}>التاريخ</p>
-                  </div>
-                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937' }}>{excuse.day || '-'}</p>
-                    <p style={{ fontSize: 9, color: '#6b7280' }}>اليوم</p>
-                  </div>
-                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{excuse.excuseText?.substring(0, 20) || '-'}</p>
-                    <p style={{ fontSize: 9, color: '#6b7280' }}>العذر</p>
-                  </div>
-                </div>
-                {/* Action buttons */}
-                {isPending && (
-                  <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => handleApprove(excuse.id)} style={{ flex: 1, padding: '6px 8px', background: '#dcfce7', color: '#15803d', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bbf7d0', cursor: 'pointer' }}>✅ قبول</button>
-                    <button onClick={() => { setRejectModal(excuse); setRejectReason(''); }} style={{ flex: 1, padding: '6px 8px', background: '#fee2e2', color: '#dc2626', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #fecaca', cursor: 'pointer' }}>❌ رفض</button>
-                    <button onClick={() => { setMessageModal(excuse); setCustomMessage(''); }} style={{ flex: 1, padding: '6px 8px', background: '#eff6ff', color: '#2563eb', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bfdbfe', cursor: 'pointer' }}>💬 رسالة</button>
-                  </div>
-                )}
+      ) : groupedByDay ? (
+        /* Grouped by day view (when week filter) */
+        <div>
+          {groupedByDay.map(group => (
+            <div key={group.day} style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 4px' }}>
+                <span style={{ fontSize: 16, color: '#7c3aed' }}>📅</span>
+                <h3 style={{ fontWeight: 700, color: '#7c3aed', fontSize: 14, margin: 0 }}>{group.day} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({group.items.length})</span></h3>
+                <div style={{ flex: 1, height: 1, background: '#e9d5ff' }} />
               </div>
-            );
-          })}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
+                {group.items.map(excuse => <ExcuseCard key={excuse.id} excuse={excuse} getDaysBadge={getDaysBadge} onSelect={setSelectedExcuse} onApprove={handleApprove} onReject={(e) => { setRejectModal(e); setRejectReason(''); }} onMessage={(e) => { setMessageModal(e); setCustomMessage(''); }} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* Flat grid view */
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
+          {filtered.map(excuse => <ExcuseCard key={excuse.id} excuse={excuse} getDaysBadge={getDaysBadge} onSelect={setSelectedExcuse} onApprove={handleApprove} onReject={(e) => { setRejectModal(e); setRejectReason(''); }} onMessage={(e) => { setMessageModal(e); setCustomMessage(''); }} />)}
         </div>
       )}
 
@@ -980,12 +1078,26 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [sending, setSending] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const filtered = useMemo(() => {
     let list = records;
     if (gradeFilter) list = list.filter(r => r.grade === gradeFilter);
     if (classFilter) list = list.filter(r => r.className === classFilter);
     if (search) { const q = search.toLowerCase(); list = list.filter(r => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q)); }
+    // Date range filter: only show students who had absences in the range
+    if (dateFrom || dateTo) {
+      const studentIdsInRange = new Set(
+        dailyRecords.filter(d => {
+          const date = d.recordedAt?.split('T')[0] || d.hijriDate || '';
+          if (dateFrom && date < dateFrom) return false;
+          if (dateTo && date > dateTo) return false;
+          return true;
+        }).map(d => d.studentId)
+      );
+      list = list.filter(r => studentIdsInRange.has(r.studentId));
+    }
     switch (levelFilter) {
       case 'zero': return list.filter(r => r.unexcusedDays === 0 && r.excusedDays === 0);
       case 'warning': return list.filter(r => r.unexcusedDays >= 3 && r.unexcusedDays <= 4);
@@ -996,7 +1108,7 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
       case 'mo_risk': return list.filter(r => r.excusedDays >= 10);
       default: return list;
     }
-  }, [records, gradeFilter, classFilter, search, levelFilter]);
+  }, [records, gradeFilter, classFilter, search, levelFilter, dateFrom, dateTo, dailyRecords]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -1112,6 +1224,11 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
         <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={selectStyle}>
           <option value="">كل الفصول</option>{classes.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="من تاريخ"
+          style={{ height: 36, padding: '0 8px', border: '2px solid #d1d5db', borderRadius: 8, fontSize: 12 }} />
+        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="إلى تاريخ"
+          style={{ height: 36, padding: '0 8px', border: '2px solid #d1d5db', borderRadius: 8, fontSize: 12 }} />
+        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ height: 36, padding: '0 10px', background: '#fee2e2', color: '#dc2626', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 11 }}>✕ مسح التاريخ</button>}
         <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={selectStyle}>
           <option value="desc">الأكثر غياباً</option><option value="asc">الأقل غياباً</option><option value="alpha">أبجدياً</option>
         </select>
@@ -1364,6 +1481,55 @@ const ReportsTab: React.FC<{ records: AbsenceRow[]; cumulativeRecords: Cumulativ
         </div>
       )}
     </>
+  );
+};
+
+// ============================================================
+// Excuse Card Component (extracted for reuse in grouped/flat views)
+// ============================================================
+const ExcuseCard: React.FC<{
+  excuse: ParentExcuseRow;
+  getDaysBadge: (e: ParentExcuseRow) => React.ReactNode;
+  onSelect: (e: ParentExcuseRow) => void;
+  onApprove: (id: number) => void;
+  onReject: (e: ParentExcuseRow) => void;
+  onMessage: (e: ParentExcuseRow) => void;
+}> = ({ excuse, getDaysBadge, onSelect, onApprove, onReject, onMessage }) => {
+  const isPending = excuse.status === 'معلق';
+  const isApproved = excuse.status === 'مقبول';
+  const statusColor = isPending ? '#f59e0b' : isApproved ? '#22c55e' : '#ef4444';
+  const statusIcon = isPending ? '⏳' : isApproved ? '✅' : '❌';
+  const isParent = excuse.source === 'parent';
+  const daysBadge = getDaysBadge(excuse);
+  return (
+    <div onClick={() => onSelect(excuse)}
+      style={{ background: '#fff', borderRadius: 14, border: `2px solid ${statusColor}30`, padding: 16, cursor: 'pointer', position: 'relative', transition: 'box-shadow 0.2s' }}>
+      <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 18 }}>{statusIcon}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{excuse.status}</span>
+      </div>
+      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 4 }}>
+        {daysBadge}
+        <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: isParent ? '#f3e8ff' : '#f3f4f6', color: isParent ? '#7c3aed' : '#6b7280', border: `1px solid ${isParent ? '#d8b4fe' : '#d1d5db'}` }}>{isParent ? 'ولي أمر' : 'يومي'}</span>
+        {excuse.attachments !== 'لا' && <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>📎 مرفق</span>}
+      </div>
+      <div style={{ marginTop: 36, marginBottom: 12 }}>
+        <h3 style={{ fontWeight: 700, color: '#1f2937', fontSize: 14, lineHeight: 1.4 }}>{excuse.studentName}</h3>
+        <p style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{excuse.grade} / {excuse.class}</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
+        <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}><p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937' }}>{excuse.absenceDate || '-'}</p><p style={{ fontSize: 9, color: '#6b7280' }}>التاريخ</p></div>
+        <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}><p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937' }}>{excuse.day || '-'}</p><p style={{ fontSize: 9, color: '#6b7280' }}>اليوم</p></div>
+        <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}><p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{excuse.excuseText?.substring(0, 20) || '-'}</p><p style={{ fontSize: 9, color: '#6b7280' }}>العذر</p></div>
+      </div>
+      {isPending && (
+        <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => onApprove(excuse.id)} style={{ flex: 1, padding: '6px 8px', background: '#dcfce7', color: '#15803d', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bbf7d0', cursor: 'pointer' }}>✅ قبول</button>
+          <button onClick={() => onReject(excuse)} style={{ flex: 1, padding: '6px 8px', background: '#fee2e2', color: '#dc2626', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #fecaca', cursor: 'pointer' }}>❌ رفض</button>
+          <button onClick={() => onMessage(excuse)} style={{ flex: 1, padding: '6px 8px', background: '#eff6ff', color: '#2563eb', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bfdbfe', cursor: 'pointer' }}>💬 رسالة</button>
+        </div>
+      )}
+    </div>
   );
 };
 
