@@ -26,6 +26,7 @@ import AttendancePage from './pages/AttendancePage';
 import AuditLogPage from './pages/AuditLogPage';
 import ReportsPage from './pages/ReportsPage';
 import GeneralFormsPage from './pages/GeneralFormsPage';
+import ParentExcusePublicPage from './pages/ParentExcusePublicPage';
 import './App.css';
 
 function getStoredUser(): AuthUser | null {
@@ -68,6 +69,9 @@ function AppContent() {
   }
   if (location.pathname === '/admin-tardiness') {
     return <AdminTardinessPage />;
+  }
+  if (location.pathname === '/parent-excuse-form') {
+    return <ParentExcusePublicPage />;
   }
 
   // Not logged in → show login page

@@ -1,22 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { absenceApi, AbsenceData } from '../api/absence';
+import { parentExcuseApi, ParentExcuseRow } from '../api/parentExcuse';
 import { studentsApi } from '../api/students';
 import { settingsApi, StageConfigData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
+import { printForm, PrintFormData, FormId } from '../utils/printTemplates';
+import { toIndic, escapeHtml, openPrintWindow, buildLetterheadHtml, getSharedPrintCSS, getTodayDates, formatClass, sortByClass } from '../utils/printUtils';
 
 const SCHOOL_DAYS = 180;
+const BASE_URL = window.location.origin;
 
-const ABSENCE_TYPES: Record<string, { label: string; color: string; bg: string }> = {
-  FullDay: { label: 'يوم كامل', color: '#dc2626', bg: '#fee2e2' },
-  Period: { label: 'حصة', color: '#ea580c', bg: '#ffedd5' },
-};
-
-const EXCUSE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  Excused: { label: 'بعذر', color: '#16a34a', bg: '#dcfce7' },
-  Unexcused: { label: 'بدون عذر', color: '#dc2626', bg: '#fee2e2' },
-};
-
+// ============================== Types ==============================
 interface AbsenceRow {
   id: number; studentId: number; studentNumber: string; studentName: string;
   grade: string; className: string; stage: string; mobile: string;
@@ -34,11 +29,13 @@ interface CumulativeRow {
 
 interface StudentOption { id: number; studentNumber: string; name: string; stage: string; grade: string; className: string; }
 
-type TabType = 'today' | 'approved' | 'reports';
+type TabType = 'today' | 'approved' | 'excuses' | 'reports';
 
+// ============================== Main Component ==============================
 const AbsencePage: React.FC = () => {
   const [records, setRecords] = useState<AbsenceRow[]>([]);
   const [cumulativeRecords, setCumulativeRecords] = useState<CumulativeRow[]>([]);
+  const [excuses, setExcuses] = useState<ParentExcuseRow[]>([]);
   const [stages, setStages] = useState<StageConfigData[]>([]);
   const [loading, setLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState('__all__');
@@ -48,21 +45,27 @@ const AbsencePage: React.FC = () => {
   const enabledStages = useMemo(() =>
     stages.filter((s) => s.isEnabled && s.grades.some((g) => g.isEnabled && g.classCount > 0)), [stages]);
 
+  const currentStageId = useMemo(() => {
+    if (stageFilter === '__all__') return undefined;
+    return SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter;
+  }, [stageFilter]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const stageId = stageFilter !== '__all__' ? (SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter) : undefined;
-      const [rRes, sRes, cRes] = await Promise.all([
+      const [rRes, sRes, cRes, eRes] = await Promise.all([
         absenceApi.getAll(),
         settingsApi.getStructure(),
-        absenceApi.getAllCumulative(stageId),
+        absenceApi.getAllCumulative(currentStageId),
+        parentExcuseApi.getAll(currentStageId),
       ]);
       if (rRes.data?.data) setRecords(rRes.data.data);
       if (sRes.data?.data?.stages) setStages(Array.isArray(sRes.data.data.stages) ? sRes.data.data.stages : []);
       if (cRes.data?.data) setCumulativeRecords(cRes.data.data);
+      if (eRes.data?.data) setExcuses(eRes.data.data);
     } catch { /* empty */ }
     finally { setLoading(false); }
-  }, [stageFilter]);
+  }, [currentStageId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -76,43 +79,49 @@ const AbsencePage: React.FC = () => {
   const todayRecords = useMemo(() =>
     filteredByStage.filter((r) => r.recordedAt?.startsWith(todayDate)), [filteredByStage, todayDate]);
 
+  const pendingExcuses = useMemo(() => excuses.filter(e => e.status === 'معلق').length, [excuses]);
+
+  const schoolSettings = useMemo(() => ({
+    letterheadMode: 'default', schoolName: 'متوسطة وثانوية العرين', eduAdmin: 'إدارة تعليم أبها', eduDept: 'الشؤون التعليمية'
+  }), []);
+
   if (loading) {
-    return (<div style={{ textAlign: 'center', padding: '60px' }}><div className="spinner" /><p style={{ color: '#666', marginTop: '16px' }}>جاري التحميل...</p></div>);
+    return (<div style={{ textAlign: 'center', padding: 60 }}><div className="spinner" /><p style={{ color: '#666', marginTop: 16 }}>جاري التحميل...</p></div>);
   }
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
-            <span style={{ fontSize: '24px' }}>📋</span>
+      {/* Hero Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 10, background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca' }}>
+            <span style={{ fontSize: 24 }}>📋</span>
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>الغياب</h2>
-            <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>تسجيل ومتابعة حالات الغياب</p>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111' }}>الغياب {currentStageId ? `— ${stageFilter}` : ''}</h2>
+            <p style={{ margin: 0, fontSize: 14, color: '#666' }}>{getTodayDates().dayName} - {getTodayDates().hijri}</p>
           </div>
         </div>
         <button onClick={() => setModalOpen(true)} style={{
           padding: '10px 20px', background: '#ea580c', color: '#fff',
-          borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
+          borderRadius: 10, fontWeight: 700, border: 'none', cursor: 'pointer',
           boxShadow: '0 4px 14px rgba(234,88,12,0.3)',
         }}>+ تسجيل غياب</button>
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard label="غياب اليوم" value={todayRecords.length} color="#ea580c" />
-        <StatCard label="بدون عذر" value={filteredByStage.filter((r) => r.excuseType === 'Unexcused').length} color="#dc2626" />
-        <StatCard label="بعذر" value={filteredByStage.filter((r) => r.excuseType === 'Excused').length} color="#2563eb" />
-        <StatCard label="تم الإرسال" value={filteredByStage.filter((r) => r.isSent).length} color="#15803d" />
-        <StatCard label="حماية (10+)" value={cumulativeRecords.filter((r) => r.unexcusedDays >= 10).length} color="#ef4444" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
+        <StatCard label="غياب اليوم" value={todayRecords.length} color="#ea580c" icon="📅" />
+        <StatCard label="أعذار معلقة" value={pendingExcuses} color="#8b5cf6" icon="📝" />
+        <StatCard label="حماية (10+)" value={cumulativeRecords.filter(r => r.unexcusedDays >= 10).length} color="#ef4444" icon="🛡️" />
+        <StatCard label="بدون عذر" value={filteredByStage.filter(r => r.excuseType === 'Unexcused').length} color="#dc2626" icon="❌" />
+        <StatCard label="تم الإرسال" value={filteredByStage.filter(r => r.isSent).length} color="#15803d" icon="✅" />
       </div>
 
       {/* Stage Filter */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '14px', fontWeight: 700, color: '#6b7280' }}>المرحلة:</span>
-        <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#6b7280' }}>المرحلة:</span>
+        <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', borderRadius: 8, padding: 3 }}>
           <FilterBtn label="الكل" count={records.length} active={stageFilter === '__all__'} onClick={() => setStageFilter('__all__')} color="#ea580c" />
           {enabledStages.map((stage) => {
             const info = SETTINGS_STAGES.find((s) => s.id === stage.stage);
@@ -122,26 +131,32 @@ const AbsencePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '10px', padding: '4px', marginBottom: '16px' }}>
+      {/* Tabs — 4 tabs matching original */}
+      <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', borderRadius: 10, padding: 4, marginBottom: 16 }}>
         {([
           { id: 'today' as TabType, label: 'الغياب اليومي', icon: '📅' },
-          { id: 'approved' as TabType, label: 'السجل التراكمي', icon: '📋' },
+          { id: 'approved' as TabType, label: 'المعتمد', icon: '✅' },
+          { id: 'excuses' as TabType, label: 'الأعذار', icon: '📝', badge: pendingExcuses },
           { id: 'reports' as TabType, label: 'التقارير', icon: '📊' },
         ]).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            flex: 1, padding: '10px 16px', borderRadius: '8px',
+            flex: 1, padding: '10px 16px', borderRadius: 8,
             background: activeTab === tab.id ? '#fff' : 'transparent',
             color: activeTab === tab.id ? '#ea580c' : '#6b7280',
-            fontWeight: 700, fontSize: '14px', border: 'none', cursor: 'pointer',
+            fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer',
             boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-          }}>{tab.icon} {tab.label}</button>
+            position: 'relative',
+          }}>
+            {tab.icon} {tab.label}
+            {tab.badge ? <span style={{ position: 'absolute', top: 4, left: 4, background: '#ef4444', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tab.badge}</span> : null}
+          </button>
         ))}
       </div>
 
-      {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} />}
-      {activeTab === 'approved' && <ApprovedTab records={cumulativeRecords} dailyRecords={filteredByStage} onRefresh={loadData} />}
-      {activeTab === 'reports' && <ReportsTab records={filteredByStage} cumulativeRecords={cumulativeRecords} />}
+      {activeTab === 'today' && <TodayTab records={todayRecords} allRecords={filteredByStage} onRefresh={loadData} stageFilter={stageFilter} settings={schoolSettings} />}
+      {activeTab === 'approved' && <ApprovedTab records={cumulativeRecords} dailyRecords={filteredByStage} onRefresh={loadData} settings={schoolSettings} />}
+      {activeTab === 'excuses' && <ExcusesTab excuses={excuses} onRefresh={loadData} settings={schoolSettings} />}
+      {activeTab === 'reports' && <ReportsTab records={filteredByStage} cumulativeRecords={cumulativeRecords} settings={schoolSettings} />}
 
       {modalOpen && <AddAbsenceModal stages={enabledStages} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); loadData(); }} />}
     </div>
@@ -149,17 +164,26 @@ const AbsencePage: React.FC = () => {
 };
 
 // ============================================================
-// Today Tab
+// Today Tab — Enhanced with grouped table, platform import, late modal, all print forms
 // ============================================================
-const TodayTab: React.FC<{ records: AbsenceRow[]; onRefresh: () => void; stageFilter: string }> = ({ records, onRefresh, stageFilter }) => {
+const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRefresh: () => void; stageFilter: string; settings: any }> = ({ records, allRecords, onRefresh, stageFilter, settings }) => {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<AbsenceRow | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
   const [msgEditorRow, setMsgEditorRow] = useState<AbsenceRow | null>(null);
+  const [lateModal, setLateModal] = useState<AbsenceRow | null>(null);
+  const [lateStatus, setLateStatus] = useState('غائب');
+  const [lateTime, setLateTime] = useState('');
+  const [includeLink, setIncludeLink] = useState(true);
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ sent: 0, total: 0 });
+  const noorFileRef = useRef<HTMLInputElement>(null);
+  const platformFileRef = useRef<HTMLInputElement>(null);
 
-  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Excel import handler (Noor + Platform)
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>, isPlatform = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImporting(true);
@@ -168,7 +192,6 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; onRefresh: () => void; stageFi
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      // Handle merged cells
       if (sheet['!merges']) {
         for (const merge of sheet['!merges']) {
           const srcRef = XLSX.utils.encode_cell({ r: merge.s.r, c: merge.s.c });
@@ -182,15 +205,17 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; onRefresh: () => void; stageFi
         }
       }
       const rows: string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-      // Find header row
-      const hdrIdx = rows.findIndex(r => r.some(c => String(c).includes('\u0627\u0644\u0625\u0633\u0645'))); // الإسم
-      if (hdrIdx < 0) { showError('\u0644\u0645 \u064a\u062a\u0645 \u0627\u0644\u062a\u0639\u0631\u0641 \u0639\u0644\u0649 \u0647\u064a\u0643\u0644 \u0627\u0644\u0645\u0644\u0641'); return; }
+      const hdrIdx = rows.findIndex(r => r.some(c => String(c).includes('الإسم') || String(c).includes('الاسم')));
+      if (hdrIdx < 0) { showError('لم يتم التعرف على هيكل الملف'); return; }
       const hdrs = rows[hdrIdx].map(String);
-      const nameCol = hdrs.findIndex(h => h.includes('\u0627\u0644\u0625\u0633\u0645'));
-      const idCol = hdrs.findIndex(h => h.includes('\u0627\u0644\u0647\u0648\u064a\u0629'));
-      const typeCol = hdrs.findIndex(h => h.includes('\u0646\u0648\u0639'));
-      // Fill down empty cells in key columns
-      const fillCols = hdrs.map((h, i) => (h.includes('\u0627\u0644\u0641\u0635\u0644') || h.includes('\u0627\u0644\u0645\u0631\u062d\u0644\u0629') || h.includes('\u0646\u0648\u0639')) ? i : -1).filter(i => i >= 0);
+      const nameCol = hdrs.findIndex(h => h.includes('الإسم') || h.includes('الاسم'));
+      const idCol = hdrs.findIndex(h => h.includes('الهوية'));
+      const phoneCol = hdrs.findIndex(h => h.includes('الجوال'));
+      const stageCol = hdrs.findIndex(h => h.includes('المرحلة'));
+      const classCol = hdrs.findIndex(h => h.includes('الفصل'));
+      const typeCol = hdrs.findIndex(h => h.includes('نوع'));
+      // Fill down empty cells
+      const fillCols = hdrs.map((h, i) => (h.includes('الفصل') || h.includes('المرحلة') || h.includes('نوع')) ? i : -1).filter(i => i >= 0);
       for (const ci of fillCols) {
         let last = '';
         for (let r = hdrIdx + 1; r < rows.length; r++) {
@@ -202,36 +227,76 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; onRefresh: () => void; stageFi
       for (let i = hdrIdx + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || !row[nameCol]) continue;
-        const name = String(row[nameCol]).trim();
-        const num = idCol >= 0 ? String(row[idCol]).trim() : '';
-        const rawType = typeCol >= 0 ? String(row[typeCol]).trim() : '';
-        const absenceType = rawType.includes('\u062d\u0635\u0629') ? 'Period' : 'FullDay';
-        students.push({ studentNumber: num, name, absenceType });
+        students.push({
+          studentNumber: idCol >= 0 ? String(row[idCol]).trim() : '',
+          name: String(row[nameCol]).trim(),
+          absenceType: typeCol >= 0 && String(row[typeCol]).includes('حصة') ? 'Period' : 'FullDay',
+        });
       }
-      if (students.length === 0) { showError('\u0644\u0627 \u064a\u0648\u062c\u062f \u0637\u0644\u0627\u0628 \u0641\u064a \u0627\u0644\u0645\u0644\u0641'); return; }
-      if (!window.confirm(`\u0633\u064a\u062a\u0645 \u0627\u0633\u062a\u064a\u0631\u0627\u062f ${students.length} \u0637\u0627\u0644\u0628. \u0647\u0644 \u062a\u0631\u064a\u062f \u0627\u0644\u0645\u062a\u0627\u0628\u0639\u0629\u061f`)) return;
-      const res = await absenceApi.importFromExcel(students, 'noor');
-      if (res.data?.data) showSuccess(res.data.data.message);
+      if (students.length === 0) { showError('لا يوجد طلاب في الملف'); return; }
+      if (!window.confirm(`سيتم استيراد ${students.length} طالب${isPlatform ? ' (منصة مدرستي)' : ' (نور)'}. هل تريد المتابعة؟`)) return;
+      const source = isPlatform ? 'platform' : 'noor';
+      const res = await absenceApi.importFromExcel(students, source);
+      if (res.data?.data) showSuccess(res.data.data.message || `تم استيراد ${students.length} طالب`);
       onRefresh();
-    } catch (err: any) {
-      showError('\u062e\u0637\u0623 \u0641\u064a \u0627\u0644\u0627\u0633\u062a\u064a\u0631\u0627\u062f: ' + (err?.message || ''));
-    } finally {
-      setImporting(false);
-      e.target.value = '';
-    }
+    } catch (err: any) { showError('خطأ في الاستيراد: ' + (err?.message || '')); }
+    finally { setImporting(false); e.target.value = ''; }
   };
 
   const filtered = useMemo(() => {
     if (!search) return records;
     const q = search.toLowerCase();
-    return records.filter((r) => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q));
+    return records.filter(r => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q));
   }, [records, search]);
 
-  const toggleSelect = (id: number) => setSelected((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const toggleSelectAll = () => { if (selected.size === filtered.length) setSelected(new Set()); else setSelected(new Set(filtered.map((r) => r.id))); };
+  // Group records by class
+  const groupedRecords = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => {
+      const ka = `${a.grade}|${a.className}|${a.studentName}`;
+      const kb = `${b.grade}|${b.className}|${b.studentName}`;
+      return ka.localeCompare(kb, 'ar');
+    });
+    const groups: { key: string; label: string; records: AbsenceRow[] }[] = [];
+    let currentKey = '';
+    sorted.forEach(r => {
+      const key = `${r.grade}/${r.className}`;
+      if (key !== currentKey) {
+        groups.push({ key, label: `${r.grade} / ${r.className}`, records: [] });
+        currentKey = key;
+      }
+      groups[groups.length - 1].records.push(r);
+    });
+    return groups;
+  }, [filtered]);
+
+  const toggleSelect = (id: number) => setSelected(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleSelectAll = () => { if (selected.size === filtered.length) setSelected(new Set()); else setSelected(new Set(filtered.map(r => r.id))); };
 
   const handleDelete = async () => { if (!confirmDelete) return; try { await absenceApi.delete(confirmDelete.id); showSuccess('تم الحذف'); setConfirmDelete(null); onRefresh(); } catch { showError('خطأ'); } };
 
+  const handleToggleExcuse = async (r: AbsenceRow) => {
+    const newType = r.excuseType === 'Excused' ? 'Unexcused' : 'Excused';
+    try { await absenceApi.updateExcuseType(r.id, newType); showSuccess(`تم تغيير العذر إلى: ${newType === 'Excused' ? 'بعذر' : 'بدون عذر'}`); onRefresh(); } catch { showError('فشل'); }
+  };
+
+  // Late status modal
+  const openLateModal = (r: AbsenceRow) => {
+    setLateModal(r);
+    setLateStatus(r.tardinessStatus || 'غائب');
+    setLateTime(r.arrivalTime || '');
+  };
+
+  const saveLateStatus = async () => {
+    if (!lateModal) return;
+    try {
+      await absenceApi.updateLateStatus(lateModal.id, lateStatus, lateStatus === 'متأخر' ? lateTime : '');
+      showSuccess('تم التحديث');
+      setLateModal(null);
+      onRefresh();
+    } catch { showError('فشل التحديث'); }
+  };
+
+  // WhatsApp send with excuse link
   const handleSendWhatsApp = (r: AbsenceRow) => {
     setMsgEditorRow(r);
   };
@@ -239,10 +304,32 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; onRefresh: () => void; stageFi
   const handleConfirmSend = async (message: string) => {
     if (!msgEditorRow) return;
     setSendingId(msgEditorRow.id);
-    try { const res = await absenceApi.sendWhatsApp(msgEditorRow.id, { message }); if (res.data?.data?.success) { showSuccess('تم الإرسال'); setMsgEditorRow(null); onRefresh(); } else showError(res.data?.message || 'فشل'); }
-    catch { showError('خطأ'); } finally { setSendingId(null); }
+    try {
+      const res = await absenceApi.sendWhatsApp(msgEditorRow.id, { message });
+      if (res.data?.data?.success) { showSuccess('تم الإرسال ✓'); setMsgEditorRow(null); onRefresh(); }
+      else showError(res.data?.message || 'فشل');
+    } catch { showError('خطأ'); }
+    finally { setSendingId(null); }
   };
 
+  // Bulk send with progress
+  const handleSendAll = async () => {
+    const unsent = filtered.filter(r => !r.isSent);
+    if (unsent.length === 0) { showError('تم إرسال جميع الإشعارات سابقاً'); return; }
+    if (!window.confirm(`سيتم إرسال إشعارات لـ ${unsent.length} ولي أمر.\n⏱️ التقدير: ~${Math.ceil(unsent.length * 10 / 60)} دقائق\n\nهل تريد المتابعة؟`)) return;
+    setBulkSending(true);
+    setBulkProgress({ sent: 0, total: unsent.length });
+    let sentCount = 0;
+    for (const r of unsent) {
+      try { await absenceApi.sendWhatsApp(r.id, {}); sentCount++; } catch { /* skip */ }
+      setBulkProgress({ sent: sentCount, total: unsent.length });
+    }
+    setBulkSending(false);
+    showSuccess(`تم الإرسال: ${sentCount} ناجح من ${unsent.length}`);
+    onRefresh();
+  };
+
+  // Bulk actions for selected
   const handleSendBulk = async () => {
     if (selected.size === 0) return;
     try { const res = await absenceApi.sendWhatsAppBulk(Array.from(selected)); if (res.data?.data) { showSuccess(`تم إرسال ${res.data.data.sentCount} من ${res.data.data.total}`); setSelected(new Set()); onRefresh(); } }
@@ -251,131 +338,317 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; onRefresh: () => void; stageFi
 
   const handleDeleteBulk = async () => {
     if (selected.size === 0) return;
+    if (!window.confirm(`حذف ${selected.size} سجل؟`)) return;
     try { const res = await absenceApi.deleteBulk(Array.from(selected)); if (res.data?.data) { showSuccess(`تم حذف ${res.data.data.deletedCount}`); setSelected(new Set()); onRefresh(); } }
     catch { showError('خطأ'); }
   };
 
-  const handleToggleExcuse = async (r: AbsenceRow) => {
-    const newType = r.excuseType === 'Excused' ? 'Unexcused' : 'Excused';
-    try { await absenceApi.updateExcuseType(r.id, newType); showSuccess(`تم التغيير إلى ${newType === 'Excused' ? 'بعذر' : 'بدون عذر'}`); onRefresh(); } catch { showError('خطأ'); }
+  // Print today's absence list
+  const handlePrintToday = () => {
+    if (filtered.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
+    const { hijri, miladi, dayName } = getTodayDates();
+    const sorted = [...filtered].sort((a, b) => `${a.grade}${a.className}`.localeCompare(`${b.grade}${b.className}`, 'ar'));
+    let prevClass = '';
+    let rows = '';
+    sorted.forEach((r, i) => {
+      const key = `${r.grade} / ${r.className}`;
+      if (key !== prevClass) {
+        if (i > 0) rows += '<tr style="height:4px"><td colspan="6" style="border:none;padding:0"></td></tr>';
+        rows += `<tr style="background:#f5f5f5;font-weight:700"><td colspan="6" style="padding:8px;font-size:12pt">${escapeHtml(key)} (${sorted.filter(x => `${x.grade} / ${x.className}` === key).length})</td></tr>`;
+        prevClass = key;
+      }
+      const teacher = (!r.recordedBy || r.recordedBy === 'يدوي' || r.recordedBy === 'مدير_النظام') ? 'الوكيل' : r.recordedBy;
+      const excuseLabel = r.excuseType === 'Excused' ? 'بعذر' : 'بدون عذر';
+      const platform = r.notes?.includes('منصة') ? ' <span style="color:#0891b2;font-size:10pt;font-weight:bold">(منصة)</span>' : '';
+      rows += `<tr><td class="data-cell">${toIndic(i + 1)}</td><td class="name-cell">${escapeHtml(r.studentName)}${platform}</td><td class="data-cell">${escapeHtml(key)}</td><td class="data-cell" style="font-size:11pt">${escapeHtml(teacher)}</td><td class="data-cell">${excuseLabel}</td><td class="data-cell" style="color:${r.isSent ? 'green' : '#999'};font-weight:bold">${r.isSent ? 'تم' : '-'}</td></tr>`;
+    });
+    const pw = openPrintWindow(`<html dir="rtl"><head><style>${getSharedPrintCSS()}</style></head><body>
+      ${buildLetterheadHtml(settings)}
+      <h2 style="text-align:center;margin:10px 0 5px">كشف الغياب اليومي ليوم ${dayName}</h2>
+      <p style="text-align:center;font-size:12pt;color:#555">${hijri} الموافق ${miladi} م</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="background:#ea580c;color:white">
+        <th style="padding:8px;width:5%">م</th><th style="padding:8px;width:28%">اسم الطالب</th><th style="padding:8px;width:10%">الصف</th><th style="padding:8px;width:15%">المسجّل</th><th style="padding:8px;width:15%">العذر</th><th style="padding:8px;width:7%">التواصل</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+      <p style="text-align:center;margin-top:12px;font-size:12pt;font-weight:bold">إجمالي: ${toIndic(sorted.length)} طالب</p>
+    </body></html>`);
+    if (pw) { pw.document.close(); setTimeout(() => pw.print(), 300); }
   };
 
-  const handleExport = async () => {
-    try {
-      const stage = stageFilter !== '__all__' ? (SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter) : undefined;
-      const res = await absenceApi.exportCsv(stage);
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement('a'); a.href = url; a.download = 'absence.csv'; a.click(); window.URL.revokeObjectURL(url);
-    } catch { showError('خطأ في التصدير'); }
+  // Print official form from today tab
+  const handlePrintForm = (formId: FormId, r: AbsenceRow) => {
+    const today = new Date();
+    const data: PrintFormData = {
+      studentName: r.studentName,
+      grade: `${r.grade} / ${r.className}`,
+      violationDate: today.toLocaleDateString('ar-SA-u-ca-islamic-umalqura'),
+      violationDay: today.toLocaleDateString('ar-SA', { weekday: 'long' }),
+      unexcusedDays: 1,
+      excusedDays: 0,
+      contactType: 'غياب',
+      contactReason: 'غياب عن الحضور',
+      contactResult: 'تم التواصل بنجاح',
+    };
+    printForm(formId, data, settings);
   };
 
-  const handlePrint = () => {
-    const pw = window.open('', '_blank');
-    if (!pw) return;
-    const rows = filtered.map((r, i) => `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.studentNumber}</td><td>${r.grade} (${r.className})</td><td>${r.excuseType === 'Excused' ? 'بعذر' : 'بدون عذر'}</td><td>${r.tardinessStatus === 'متأخر' ? 'متأخر ' + r.arrivalTime : 'غائب'}</td><td>${r.isSent ? 'تم' : '-'}</td></tr>`).join('');
-    pw.document.write(`<html dir="rtl"><head><title>كشف الغياب اليومي</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>كشف الغياب اليومي</h2><p style="text-align:center">العدد: ${filtered.length}</p>
-      <table><thead><tr><th>#</th><th>الطالب</th><th>الرقم</th><th>الصف</th><th>العذر</th><th>الحالة</th><th>الإرسال</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
-  };
+  const cntAbsent = filtered.filter(r => r.tardinessStatus !== 'متأخر').length;
+  const cntLate = filtered.filter(r => r.tardinessStatus === 'متأخر').length;
+  const cntSent = filtered.filter(r => r.isSent).length;
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..."
-          style={{ flex: 1, minWidth: '200px', height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px' }} />
-        <button onClick={handlePrint} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
-        <button onClick={handleExport} style={{ height: '38px', padding: '0 16px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📥 تصدير</button>
-        <label style={{ height: '38px', padding: '0 16px', background: '#7c3aed', color: '#fff', borderRadius: '8px', fontWeight: 700, cursor: importing ? 'not-allowed' : 'pointer', fontSize: '13px', display: 'inline-flex', alignItems: 'center', opacity: importing ? 0.6 : 1 }}>
-          {importing ? '⏳ جاري الاستيراد...' : '📂 استيراد Excel'}
-          <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} style={{ display: 'none' }} disabled={importing} />
-        </label>
+      <input ref={noorFileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => handleExcelImport(e, false)} />
+      <input ref={platformFileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => handleExcelImport(e, true)} />
+
+      {/* Action bar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <ImportDropdown onNoor={() => noorFileRef.current?.click()} onPlatform={() => platformFileRef.current?.click()} />
+        </div>
+        <button onClick={() => {/* opens modal from parent */}} style={btnStyle('#ea580c')}>+ تسجيل يدوي</button>
+        <button onClick={onRefresh} style={btnStyle('#6b7280', true)}>🔄 تحديث</button>
+        <div style={{ flex: 1 }} />
+        <button onClick={handleSendAll} disabled={bulkSending} style={btnStyle('#25d366')}>
+          {bulkSending ? `⏳ ${bulkProgress.sent}/${bulkProgress.total}` : '📱 إرسال للجميع'}
+        </button>
+        <button onClick={handlePrintToday} style={btnStyle('#4f46e5', true)}>🖨️ طباعة الكشف</button>
       </div>
 
-      {selected.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#fef2f2', borderRadius: '10px', marginBottom: '12px', border: '1px solid #fecaca' }}>
-          <span style={{ fontWeight: 700, color: '#dc2626' }}>تم تحديد {selected.size}</span>
-          <div style={{ flex: 1 }} />
-          <button onClick={handleSendBulk} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📱 إرسال واتساب</button>
-          <button onClick={handleDeleteBulk} style={{ padding: '6px 16px', background: '#dc2626', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
-          <button onClick={() => setSelected(new Set())} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>إلغاء</button>
-        </div>
-      )}
+      {/* Search */}
+      <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم أو الرقم..."
+        style={{ width: '100%', maxWidth: 300, height: 36, padding: '0 12px', border: '2px solid #d1d5db', borderRadius: 10, fontSize: 13, marginBottom: 12 }} />
 
+      {/* Table with grouped display */}
       {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#9ca3af' }}><p style={{ fontSize: '48px' }}>📋</p><p style={{ fontSize: '18px', fontWeight: 500 }}>لا يوجد غياب مسجل اليوم</p></div>
+        <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          <span style={{ fontSize: 60, color: '#d1d5db' }}>📅</span>
+          <p style={{ color: '#6b7280', marginTop: 12, fontSize: 16 }}>لا يوجد غياب مسجل اليوم</p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+            <button onClick={() => noorFileRef.current?.click()} style={btnStyle('#16a34a')}>📤 استيراد Excel</button>
+          </div>
+        </div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-            <table className="data-table">
-              <thead><tr>
-                <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} /></th>
-                <th>الطالب</th><th>الصف</th><th>العذر</th><th>الحالة</th><th>الإرسال</th><th style={{ textAlign: 'center' }}>إجراءات</th>
-              </tr></thead>
-              <tbody>
-                {filtered.map((r) => (
-                  <tr key={r.id} style={{ background: selected.has(r.id) ? '#fef2f2' : undefined }}>
-                    <td><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} /></td>
-                    <td><div style={{ fontWeight: 700 }}>{r.studentName}</div><div style={{ fontSize: '12px', color: '#9ca3af' }}>{r.studentNumber}</div></td>
-                    <td style={{ fontSize: '13px' }}>{r.grade} ({r.className})</td>
-                    <td>
-                      <button onClick={() => handleToggleExcuse(r)} style={{
-                        padding: '4px 10px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
-                        background: r.excuseType === 'Excused' ? '#dcfce7' : '#fee2e2',
-                        color: r.excuseType === 'Excused' ? '#16a34a' : '#dc2626',
-                      }}>{r.excuseType === 'Excused' ? 'بعذر' : 'بدون عذر'}</button>
-                    </td>
-                    <td>
-                      {r.tardinessStatus === 'متأخر' ? (
-                        <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>متأخر {r.arrivalTime}</span>
-                      ) : (
-                        <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#fee2e2', color: '#dc2626', fontWeight: 700 }}>غائب</span>
-                      )}
-                    </td>
-                    <td>
-                      {r.isSent ? <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#dcfce7', color: '#15803d', fontWeight: 700 }}>تم</span>
-                        : <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>لم يُرسل</span>}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                        <button onClick={() => handleSendWhatsApp(r)} disabled={sendingId === r.id} title="إرسال واتساب" style={{ padding: '4px 6px', background: 'none', border: 'none', cursor: sendingId === r.id ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: sendingId === r.id ? 0.5 : 1 }}>📱</button>
-                        <button onClick={() => setConfirmDelete(r)} title="حذف" style={{ padding: '4px 6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🗑️</button>
-                      </div>
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#ea580c', color: '#fff' }}>
+                <th style={{ padding: '10px 6px', width: 30 }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} /></th>
+                <th style={{ padding: '10px 6px', width: 30 }}>#</th>
+                <th style={{ padding: '10px 8px', textAlign: 'right' }}>اسم الطالب</th>
+                <th style={{ padding: '10px 8px' }}>المسجل</th>
+                <th style={{ padding: '10px 8px', width: 80 }}>الحالة</th>
+                <th style={{ padding: '10px 8px', minWidth: 200 }}>الإجراءات</th>
+                <th style={{ padding: '10px 6px', width: 36 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupedRecords.map((group) => (
+                <React.Fragment key={group.key}>
+                  <tr style={{ background: '#f8f9fa' }}>
+                    <td colSpan={7} style={{ padding: '8px 12px', fontWeight: 700, fontSize: 13, color: '#374151', borderTop: '2px solid #e5e7eb' }}>
+                      {group.label} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({group.records.length})</span>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  {group.records.map((r, idx) => {
+                    const teacher = (!r.recordedBy || r.recordedBy === 'يدوي' || r.recordedBy === 'مدير_النظام') ? 'الوكيل' : r.recordedBy;
+                    const isLate = r.tardinessStatus === 'متأخر';
+                    const isExcused = r.excuseType === 'Excused';
+                    return (
+                      <tr key={r.id} style={{ borderBottom: '1px solid #f3f4f6', background: idx % 2 === 0 ? '#fff' : '#fafbfc' }}>
+                        <td style={{ padding: '8px 6px', textAlign: 'center' }}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} /></td>
+                        <td style={{ padding: '8px 6px', textAlign: 'center', color: '#9ca3af' }}>{idx + 1}</td>
+                        <td style={{ padding: '8px', fontWeight: 600 }}>
+                          {r.studentName}
+                          {r.notes?.includes('منصة') && <span style={{ fontSize: 10, color: '#0891b2', fontWeight: 700, marginRight: 4 }}>(منصة)</span>}
+                        </td>
+                        <td style={{ padding: '8px', fontSize: 12, color: teacher === '-' ? '#9ca3af' : '#374151' }}>{teacher}</td>
+                        <td style={{ padding: '8px' }}>
+                          {isLate ? (
+                            <button onClick={() => openLateModal(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: '#fef3c7', color: '#a16207', borderRadius: 12, fontSize: 11, fontWeight: 700, border: '1px solid #fde68a', cursor: 'pointer' }}>⏰ متأخر {r.arrivalTime}</button>
+                          ) : (
+                            <button onClick={() => handleToggleExcuse(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isExcused ? '#dcfce7' : '#fee2e2', color: isExcused ? '#15803d' : '#dc2626', borderRadius: 12, fontSize: 11, fontWeight: 700, border: `1px solid ${isExcused ? '#bbf7d0' : '#fecaca'}`, cursor: 'pointer' }}>
+                              {isExcused ? '✅ بعذر' : '❌ بدون عذر'}
+                            </button>
+                          )}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button onClick={() => handleSendWhatsApp(r)} disabled={sendingId === r.id} style={{ padding: '4px 8px', background: r.isSent ? '#dcfce7' : '#f3f4f6', color: r.isSent ? '#15803d' : '#374151', borderRadius: 6, border: `1px solid ${r.isSent ? '#bbf7d0' : '#d1d5db'}`, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                              {r.isSent ? '✅ تم' : '📱 واتساب'}
+                            </button>
+                            <button onClick={() => handlePrintForm('tahood_hodoor', r)} style={miniBtn('#6366f1')} title="تعهد حضور">📋</button>
+                            <button onClick={() => handlePrintForm('ehalat_absence', r)} style={miniBtn('#2563eb')} title="إحالة غياب">📤</button>
+                            <button onClick={() => handlePrintForm('tawtheeq_tawasol', r)} style={miniBtn('#15803d')} title="توثيق تواصل">📞</button>
+                          </div>
+                        </td>
+                        <td style={{ padding: '6px', textAlign: 'center' }}>
+                          <button onClick={() => setConfirmDelete(r)} style={{ padding: 4, background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 14 }}>🗑️</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+          {/* Footer stats */}
+          <div style={{ display: 'flex', gap: 16, padding: '10px 16px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', fontSize: 12, color: '#6b7280' }}>
+            <span>🔴 غائب: {cntAbsent}</span>
+            <span>🟡 متأخر: {cntLate}</span>
+            <span style={{ marginRight: 'auto' }}>🟢 تم: {cntSent}</span>
+            <span>⬜ لم يُرسل: {filtered.length - cntSent}</span>
           </div>
         </div>
       )}
 
-      {confirmDelete && <ConfirmModal title="تأكيد حذف الغياب" message={`حذف سجل الغياب للطالب ${confirmDelete.studentName}؟`} onConfirm={handleDelete} onCancel={() => setConfirmDelete(null)} />}
+      {/* Auto-migrate note */}
+      <div style={{ marginTop: 12, padding: '10px 14px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6b7280' }}>
+        ℹ️ سيتم ترحيل بيانات اليوم تلقائياً إلى السجل التراكمي الساعة 12:00 صباحاً
+      </div>
 
-      {msgEditorRow && <AbsMsgEditorModal row={msgEditorRow} onClose={() => setMsgEditorRow(null)} onSend={handleConfirmSend} sending={sendingId === msgEditorRow.id} />}
+      {/* Selection bar */}
+      {selected.size > 0 && (
+        <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(31,41,55,0.95)', color: '#fff', padding: '12px 24px', borderRadius: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 16, zIndex: 50, backdropFilter: 'blur(8px)' }}>
+          <span>✅ <strong>{selected.size}</strong> محدد</span>
+          <span style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.3)' }} />
+          <button onClick={handlePrintToday} style={{ color: '#c4b5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🖨️ طباعة</button>
+          <button onClick={handleSendBulk} style={{ color: '#86efac', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📱 إرسال</button>
+          <button onClick={handleDeleteBulk} style={{ color: '#fca5a5', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🗑️ حذف</button>
+          <button onClick={() => setSelected(new Set())} style={{ color: 'rgba(255,255,255,0.6)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
+      {/* Late Modal */}
+      {lateModal && (
+        <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setLateModal(null); }}>
+          <div style={{ ...modalBox, maxWidth: 380 }}>
+            <div style={{ padding: '16px 20px', background: '#fef3c7', borderBottom: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تعديل حالة الطالب</h3>
+              <button onClick={() => setLateModal(null)} style={closeBtn}>✕</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ background: '#f9fafb', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                <p style={{ fontWeight: 700, color: '#1f2937' }}>{lateModal.studentName}</p>
+                <p style={{ fontSize: 13, color: '#6b7280' }}>{lateModal.grade} {lateModal.className}</p>
+              </div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>الحالة</label>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                {['غائب', 'متأخر'].map(s => (
+                  <label key={s} style={{ flex: 1, cursor: 'pointer' }}>
+                    <input type="radio" name="lateSt" value={s} checked={lateStatus === s} onChange={() => setLateStatus(s)} style={{ display: 'none' }} />
+                    <div style={{ padding: 12, border: `2px solid ${lateStatus === s ? (s === 'غائب' ? '#ef4444' : '#f59e0b') : '#d1d5db'}`, borderRadius: 10, textAlign: 'center', background: lateStatus === s ? (s === 'غائب' ? '#fef2f2' : '#fffbeb') : '#fff' }}>
+                      <span style={{ fontSize: 20 }}>{s === 'غائب' ? '❌' : '⏰'}</span>
+                      <p style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{s}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {lateStatus === 'متأخر' && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>وقت الحضور</label>
+                  <input type="time" value={lateTime} onChange={(e) => setLateTime(e.target.value)} style={{ width: '100%', padding: 10, border: '2px solid #d1d5db', borderRadius: 8 }} />
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setLateModal(null)} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+              <button onClick={saveLateStatus} style={{ padding: '8px 20px', background: '#f59e0b', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>حفظ</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Message Editor Modal */}
+      {msgEditorRow && <AdvancedMessageEditor row={msgEditorRow} onSend={handleConfirmSend} onClose={() => setMsgEditorRow(null)} sending={sendingId === msgEditorRow.id} includeLink={includeLink} onToggleLink={() => setIncludeLink(!includeLink)} settings={settings} />}
+
+      {/* Delete Confirm */}
+      {confirmDelete && <ConfirmModal title="حذف السجل" message={`هل أنت متأكد من حذف سجل ${confirmDelete.studentName}؟`} onConfirm={handleDelete} onCancel={() => setConfirmDelete(null)} />}
     </>
   );
 };
 
-// ── Absence Message Editor Modal ──
-const AbsMsgEditorModal: React.FC<{ row: AbsenceRow; onClose: () => void; onSend: (msg: string) => void; sending: boolean }> = ({ row, onClose, onSend, sending }) => {
-  const defaultMsg = `ولي أمر الطالب / ${row.studentName}\nالصف: ${row.grade} / ${row.className}\n\nنفيدكم بغياب ابنكم يوم ${row.dayName || ''} بتاريخ ${row.hijriDate || ''}\n${row.excuseType === 'Excused' ? 'نوع العذر: بعذر' : 'بدون عذر'}\n\nنأمل التواصل مع إدارة المدرسة.`;
-  const [message, setMessage] = useState(defaultMsg);
+// ============================================================
+// Advanced Message Editor — with templates, link toggle, save/restore
+// ============================================================
+const AdvancedMessageEditor: React.FC<{
+  row: AbsenceRow; onSend: (msg: string) => void; onClose: () => void;
+  sending: boolean; includeLink: boolean; onToggleLink: () => void; settings: any;
+}> = ({ row, onSend, onClose, sending, includeLink, onToggleLink, settings }) => {
+  const { hijri, dayName } = getTodayDates();
+  const schoolName = settings?.schoolName || 'المدرسة';
+  const [excuseLink, setExcuseLink] = useState('');
+  const [loadingLink, setLoadingLink] = useState(false);
+
+  const buildMessage = useCallback((withLink: boolean, link: string) => {
+    let msg = `📋 *إشعار غياب*\n\nالسلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: *${row.studentName}*\n\nنفيدكم بأن ابنكم *${row.studentName}* غائب اليوم\n📅 ${dayName} - ${hijri}\nالصف: ${row.grade} - الفصل: ${row.className}`;
+    if (withLink && link) {
+      msg += `\n\n📝 *لتقديم عذر الغياب:*\nاضغط على الرابط التالي لكتابة عذر الغياب:\n${link}\n⏳ الرابط صالح لمدة ٢٤ ساعة فقط`;
+    }
+    msg += `\n\nمع تحيات إدارة مدرسة ${schoolName}`;
+    return msg;
+  }, [row, dayName, hijri, schoolName]);
+
+  const [message, setMessage] = useState(() => buildMessage(false, ''));
+
+  // Fetch excuse link
+  useEffect(() => {
+    if (!includeLink || !row.studentNumber) return;
+    setLoadingLink(true);
+    parentExcuseApi.generateLink(row.studentNumber, row.stage).then(res => {
+      const code = res.data?.data?.code || res.data?.data?.accessCode;
+      if (code) {
+        const link = `${BASE_URL}/parent-excuse-form?token=${code}`;
+        setExcuseLink(link);
+        setMessage(buildMessage(true, link));
+      }
+    }).catch(() => { /* skip */ }).finally(() => setLoadingLink(false));
+  }, [includeLink, row.studentNumber, row.stage, buildMessage]);
+
+  const handleToggle = () => {
+    onToggleLink();
+    if (includeLink) {
+      // Turning off
+      setMessage(buildMessage(false, ''));
+    } else if (excuseLink) {
+      setMessage(buildMessage(true, excuseLink));
+    }
+  };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: '#fff', borderRadius: '20px', width: '95%', maxWidth: '500px', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff7ed' }}>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#ea580c' }}>تعديل رسالة الواتساب</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#9ca3af' }}>✕</button>
+    <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ ...modalBox, maxWidth: 520 }}>
+        <div style={{ padding: '12px 20px', background: '#25d366', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>✏️ تعديل الرسالة قبل الإرسال</h3>
+          <button onClick={onClose} style={{ ...closeBtn, color: 'rgba(255,255,255,0.8)' }}>✕</button>
         </div>
-        <div style={{ padding: '16px 20px' }}>
-          <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>الطالب: <b>{row.studentName}</b> — {row.grade}/{row.className}</div>
-          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={8} style={{ width: '100%', padding: '10px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', direction: 'rtl' }} />
+        <div style={{ padding: '10px 20px', background: '#f0fdf4', borderBottom: '1px solid #d1fae5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>{row.studentName}</span>
+            <span style={{ fontSize: 11, color: '#6b7280', marginRight: 8 }}>إشعار غياب</span>
+          </div>
+          <span style={{ fontSize: 11, color: '#9ca3af', direction: 'ltr' }}>{row.mobile || '-'}</span>
         </div>
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '8px', justifyContent: 'flex-end', background: '#f9fafb' }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', background: '#fff', border: '2px solid #d1d5db', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}>إلغاء</button>
-          <button onClick={() => onSend(message)} disabled={sending} style={{ padding: '8px 20px', background: '#25d366', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1 }}>{sending ? 'جاري الإرسال...' : 'إرسال'}</button>
+        {/* Link Toggle */}
+        <div style={{ padding: '8px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: includeLink && excuseLink ? '#f0fdf4' : '#f9fafb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16, color: includeLink ? '#16a34a' : '#9ca3af' }}>🔗</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: includeLink ? '#15803d' : '#6b7280' }}>
+              {loadingLink ? 'جاري جلب الرابط...' : (excuseLink ? 'إرفاق رابط إدخال العذر' : 'الرابط غير متاح')}
+            </span>
+          </div>
+          <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" checked={includeLink} onChange={handleToggle} style={{ width: 40, height: 22, appearance: 'none', background: includeLink ? '#22c55e' : '#d1d5db', borderRadius: 12, cursor: 'pointer', transition: 'background 0.2s' }} />
+          </label>
+        </div>
+        <div style={{ padding: 20 }}>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={14}
+            style={{ width: '100%', padding: 12, border: '2px solid #d1d5db', borderRadius: 10, fontSize: 13, lineHeight: 1.7, resize: 'vertical', fontFamily: 'Traditional Arabic, Tahoma, serif', direction: 'rtl', boxSizing: 'border-box' }} />
+        </div>
+        <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>إلغاء</button>
+          <button onClick={() => onSend(message)} disabled={sending || !message.trim()} style={{ padding: '8px 20px', background: '#25d366', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1 }}>
+            {sending ? 'جاري الإرسال...' : '📱 إرسال'}
+          </button>
         </div>
       </div>
     </div>
@@ -383,34 +656,358 @@ const AbsMsgEditorModal: React.FC<{ row: AbsenceRow; onClose: () => void; onSend
 };
 
 // ============================================================
-// Approved Tab (Cumulative)
+// Excuses Tab — Full implementation matching original
 // ============================================================
-const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow[]; onRefresh: () => void }> = ({ records, dailyRecords, onRefresh }) => {
+const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; settings: any }> = ({ excuses, onRefresh, settings }) => {
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [selectedExcuse, setSelectedExcuse] = useState<ParentExcuseRow | null>(null);
+  const [rejectModal, setRejectModal] = useState<ParentExcuseRow | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [sendRejectMsg, setSendRejectMsg] = useState(false);
+  const [messageModal, setMessageModal] = useState<ParentExcuseRow | null>(null);
+  const [customMessage, setCustomMessage] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const filtered = useMemo(() => {
+    let list = excuses;
+    if (statusFilter !== 'all') {
+      const map: Record<string, string> = { pending: 'معلق', approved: 'مقبول', rejected: 'مرفوض' };
+      list = list.filter(e => e.status === map[statusFilter]);
+    }
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const start = new Date();
+      if (dateFilter === 'week') { start.setDate(now.getDate() - now.getDay()); }
+      else if (dateFilter === 'month') { start.setDate(1); }
+      start.setHours(0, 0, 0, 0);
+      list = list.filter(e => {
+        try { const d = new Date(e.submittedAt); return !isNaN(d.getTime()) && d >= start; } catch { return true; }
+      });
+    }
+    // Sort: newest first, parent excuses first
+    return [...list].sort((a, b) => {
+      const da = a.submittedAt || '0000', db = b.submittedAt || '0000';
+      if (da !== db) return db.localeCompare(da);
+      if (a.source === 'parent' && b.source !== 'parent') return -1;
+      if (b.source === 'parent' && a.source !== 'parent') return 1;
+      return 0;
+    });
+  }, [excuses, statusFilter, dateFilter]);
+
+  const counts = useMemo(() => ({
+    all: excuses.length,
+    pending: excuses.filter(e => e.status === 'معلق').length,
+    approved: excuses.filter(e => e.status === 'مقبول').length,
+    rejected: excuses.filter(e => e.status === 'مرفوض').length,
+  }), [excuses]);
+
+  // Days badge
+  const getDaysBadge = (e: ParentExcuseRow) => {
+    if (!e.submittedAt) return null;
+    try {
+      const submitted = new Date(e.submittedAt);
+      const now = new Date(); now.setHours(0, 0, 0, 0); submitted.setHours(0, 0, 0, 0);
+      const diff = Math.floor((now.getTime() - submitted.getTime()) / (1000 * 60 * 60 * 24));
+      if (diff < 0 || diff > 5) return null;
+      const color = diff <= 1 ? 'green' : diff <= 3 ? 'amber' : 'red';
+      const text = diff === 0 ? '🆕 اليوم' : diff === 1 ? 'أمس' : `مضى ${diff} أيام`;
+      const colors: Record<string, { bg: string; text: string }> = {
+        green: { bg: '#dcfce7', text: '#15803d' },
+        amber: { bg: '#fef3c7', text: '#a16207' },
+        red: { bg: '#fee2e2', text: '#dc2626' },
+      };
+      return <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: colors[color].bg, color: colors[color].text }}>{text}</span>;
+    } catch { return null; }
+  };
+
+  const handleApprove = async (id: number) => {
+    setActionLoading(true);
+    try { await parentExcuseApi.updateStatus(id, 'مقبول'); showSuccess('تم قبول العذر'); setSelectedExcuse(null); onRefresh(); }
+    catch { showError('فشل'); } finally { setActionLoading(false); }
+  };
+
+  const handleReject = async () => {
+    if (!rejectModal) return;
+    setActionLoading(true);
+    try { await parentExcuseApi.updateStatus(rejectModal.id, 'مرفوض', rejectReason, sendRejectMsg); showSuccess('تم رفض العذر'); setRejectModal(null); setRejectReason(''); onRefresh(); }
+    catch { showError('فشل'); } finally { setActionLoading(false); }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageModal || !customMessage.trim()) { showError('يرجى كتابة الرسالة'); return; }
+    setActionLoading(true);
+    try { await parentExcuseApi.sendCustomMessage(messageModal.id, customMessage); showSuccess('تم إرسال الرسالة'); setMessageModal(null); setCustomMessage(''); }
+    catch { showError('فشل الإرسال'); } finally { setActionLoading(false); }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('حذف هذا العذر نهائياً؟')) return;
+    try { await parentExcuseApi.delete(id); showSuccess('تم الحذف'); setSelectedExcuse(null); onRefresh(); }
+    catch { showError('فشل'); }
+  };
+
+  // Print excuses report
+  const handlePrint = () => {
+    if (filtered.length === 0) { showError('لا يوجد أعذار للطباعة'); return; }
+    const { hijri, miladi } = getTodayDates();
+    const withExcuse = filtered.filter(e => e.status === 'معلق' || e.status === 'مقبول');
+    const rows = withExcuse.map((e, i) => {
+      const statusColor = e.status === 'معلق' ? '#d97706' : '#16a34a';
+      const source = e.source === 'parent' ? 'ولي أمر' : 'يومي';
+      return `<tr><td>${toIndic(i + 1)}</td><td>${escapeHtml(e.studentName)}</td><td>${escapeHtml(e.grade)} / ${escapeHtml(e.class)}</td><td>${escapeHtml(e.excuseText?.substring(0, 60) || '-')}</td><td>${escapeHtml(e.absenceDate || '-')}</td><td style="color:${statusColor};font-weight:bold">${e.status}</td><td>${source}</td></tr>`;
+    }).join('');
+    const pw = openPrintWindow(`<html dir="rtl"><head><style>${getSharedPrintCSS()}</style></head><body>
+      ${buildLetterheadHtml(settings)}
+      <h2 style="text-align:center;margin:10px 0 5px">كشف الأعذار المقدمة</h2>
+      <p style="text-align:center;font-size:12pt;color:#555">${hijri} الموافق ${miladi} م</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px"><thead><tr style="background:#7c3aed;color:white">
+        <th style="padding:8px;width:5%">م</th><th style="padding:8px;width:22%">الطالب</th><th style="padding:8px;width:10%">الفصل</th><th style="padding:8px;width:25%">العذر</th><th style="padding:8px;width:13%">تاريخ الغياب</th><th style="padding:8px;width:10%">الحالة</th><th style="padding:8px;width:8%">المصدر</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+      <p style="text-align:center;margin-top:12px;font-weight:bold">${toIndic(withExcuse.length)} طالب</p>
+    </body></html>`);
+    if (pw) { pw.document.close(); setTimeout(() => pw.print(), 300); }
+  };
+
+  const statusBtns = [
+    { id: 'all', label: 'الكل', count: counts.all, bg: '#f3f4f6', color: '#374151' },
+    { id: 'pending', label: 'معلق', count: counts.pending, bg: '#fef3c7', color: '#a16207' },
+    { id: 'approved', label: 'مقبول', count: counts.approved, bg: '#dcfce7', color: '#15803d' },
+    { id: 'rejected', label: 'مرفوض', count: counts.rejected, bg: '#fee2e2', color: '#dc2626' },
+  ];
+
+  return (
+    <>
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        {statusBtns.map(b => (
+          <button key={b.id} onClick={() => setStatusFilter(b.id)} style={{
+            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            background: statusFilter === b.id ? b.bg : '#f9fafb',
+            color: statusFilter === b.id ? b.color : '#6b7280',
+            border: statusFilter === b.id ? `2px solid ${b.color}` : '1px solid #e5e7eb',
+          }}>{b.label} ({b.count})</button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} style={{ padding: '6px 12px', borderRadius: 8, border: '2px solid #d1d5db', fontSize: 12 }}>
+          <option value="all">كل الفترات</option>
+          <option value="week">هذا الأسبوع</option>
+          <option value="month">هذا الشهر</option>
+        </select>
+        <button onClick={handlePrint} style={btnStyle('#7c3aed', true)}>🖨️ طباعة</button>
+        <button onClick={onRefresh} style={btnStyle('#6b7280', true)}>🔄</button>
+      </div>
+
+      {/* Excuses list */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          <span style={{ fontSize: 60, color: '#d1d5db' }}>📝</span>
+          <p style={{ color: '#6b7280', marginTop: 12, fontSize: 16 }}>لا توجد أعذار</p>
+          <p style={{ color: '#9ca3af', fontSize: 13 }}>ستظهر هنا الأعذار المقدمة من أولياء الأمور</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
+          {filtered.map(excuse => {
+            const isPending = excuse.status === 'معلق';
+            const isApproved = excuse.status === 'مقبول';
+            const statusColor = isPending ? '#f59e0b' : isApproved ? '#22c55e' : '#ef4444';
+            const statusIcon = isPending ? '⏳' : isApproved ? '✅' : '❌';
+            const isParent = excuse.source === 'parent';
+            const daysBadge = getDaysBadge(excuse);
+            return (
+              <div key={excuse.id} onClick={() => setSelectedExcuse(excuse)}
+                style={{ background: '#fff', borderRadius: 14, border: `2px solid ${statusColor}30`, padding: 16, cursor: 'pointer', position: 'relative', transition: 'box-shadow 0.2s' }}>
+                {/* Status icon */}
+                <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 18 }}>{statusIcon}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{excuse.status}</span>
+                </div>
+                {/* Badges */}
+                <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 4 }}>
+                  {daysBadge}
+                  <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: isParent ? '#f3e8ff' : '#f3f4f6', color: isParent ? '#7c3aed' : '#6b7280', border: `1px solid ${isParent ? '#d8b4fe' : '#d1d5db'}` }}>
+                    {isParent ? 'ولي أمر' : 'يومي'}
+                  </span>
+                  {excuse.attachments !== 'لا' && <span style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, borderRadius: 10, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>📎 مرفق</span>}
+                </div>
+                {/* Student info */}
+                <div style={{ marginTop: 36, marginBottom: 12 }}>
+                  <h3 style={{ fontWeight: 700, color: '#1f2937', fontSize: 14, lineHeight: 1.4 }}>{excuse.studentName}</h3>
+                  <p style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{excuse.grade} / {excuse.class}</p>
+                </div>
+                {/* Info grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
+                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937' }}>{excuse.absenceDate || '-'}</p>
+                    <p style={{ fontSize: 9, color: '#6b7280' }}>التاريخ</p>
+                  </div>
+                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937' }}>{excuse.day || '-'}</p>
+                    <p style={{ fontSize: 9, color: '#6b7280' }}>اليوم</p>
+                  </div>
+                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#1f2937', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{excuse.excuseText?.substring(0, 20) || '-'}</p>
+                    <p style={{ fontSize: 9, color: '#6b7280' }}>العذر</p>
+                  </div>
+                </div>
+                {/* Action buttons */}
+                {isPending && (
+                  <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => handleApprove(excuse.id)} style={{ flex: 1, padding: '6px 8px', background: '#dcfce7', color: '#15803d', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bbf7d0', cursor: 'pointer' }}>✅ قبول</button>
+                    <button onClick={() => { setRejectModal(excuse); setRejectReason(''); }} style={{ flex: 1, padding: '6px 8px', background: '#fee2e2', color: '#dc2626', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #fecaca', cursor: 'pointer' }}>❌ رفض</button>
+                    <button onClick={() => { setMessageModal(excuse); setCustomMessage(''); }} style={{ flex: 1, padding: '6px 8px', background: '#eff6ff', color: '#2563eb', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bfdbfe', cursor: 'pointer' }}>💬 رسالة</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selectedExcuse && (
+        <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setSelectedExcuse(null); }}>
+          <div style={{ ...modalBox, maxWidth: 500, maxHeight: '90vh', overflow: 'auto' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📋 تفاصيل العذر</h3>
+              <button onClick={() => setSelectedExcuse(null)} style={closeBtn}>✕</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ background: '#f9fafb', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <div style={{ width: 40, height: 40, background: '#f3e8ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👤</div>
+                  <div>
+                    <h4 style={{ fontWeight: 700, color: '#1f2937', fontSize: 16, margin: 0 }}>{selectedExcuse.studentName}</h4>
+                    <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>{selectedExcuse.grade} / {selectedExcuse.class}</p>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ background: '#fff', borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>تاريخ الغياب</span><br />
+                    <strong>{selectedExcuse.absenceDate || '-'}</strong>
+                  </div>
+                  <div style={{ background: '#fff', borderRadius: 8, padding: 8, textAlign: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>الحالة</span><br />
+                    <strong style={{ color: selectedExcuse.status === 'مقبول' ? '#16a34a' : selectedExcuse.status === 'مرفوض' ? '#dc2626' : '#d97706' }}>{selectedExcuse.status}</strong>
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>✏️ سبب الغياب / العذر</label>
+                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: 16, color: '#1f2937', lineHeight: 1.6 }}>{selectedExcuse.excuseText || 'لم يُحدد'}</div>
+              </div>
+              {selectedExcuse.attachments !== 'لا' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                  📎 <div><p style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', margin: 0 }}>يوجد مرفقات</p><p style={{ fontSize: 11, color: '#3b82f6', margin: 0 }}>ستُسلم ورقياً مع الطالب</p></div>
+                </div>
+              )}
+              <p style={{ fontSize: 11, color: '#9ca3af' }}>تاريخ التقديم: {selectedExcuse.submittedAt || '-'}</p>
+            </div>
+            <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              {selectedExcuse.status === 'معلق' && (
+                <>
+                  <button onClick={() => handleApprove(selectedExcuse.id)} disabled={actionLoading} style={{ padding: '8px 16px', background: '#16a34a', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>✅ قبول</button>
+                  <button onClick={() => { setRejectModal(selectedExcuse); setSelectedExcuse(null); }} style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>❌ رفض</button>
+                </>
+              )}
+              <button onClick={() => handleDelete(selectedExcuse.id)} style={{ padding: '8px 16px', color: '#dc2626', background: '#fff', border: '1px solid #fecaca', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>🗑️ حذف</button>
+              <button onClick={() => setSelectedExcuse(null)} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}>إغلاق</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectModal && (
+        <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setRejectModal(null); }}>
+          <div style={{ ...modalBox, maxWidth: 420 }}>
+            <div style={{ padding: '16px 20px', background: '#fee2e2', borderBottom: '1px solid #fecaca' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>رفض العذر</h3>
+            </div>
+            <div style={{ padding: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>سبب الرفض (اختياري)</label>
+              <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} placeholder="أدخل سبب الرفض ليُرسل لولي الأمر..."
+                style={{ width: '100%', padding: 10, border: '2px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, color: '#4b5563', cursor: 'pointer' }}>
+                <input type="checkbox" checked={sendRejectMsg} onChange={() => setSendRejectMsg(!sendRejectMsg)} style={{ accentColor: '#dc2626' }} />
+                إرسال رسالة لولي الأمر
+              </label>
+            </div>
+            <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setRejectModal(null)} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+              <button onClick={handleReject} disabled={actionLoading} style={{ padding: '8px 20px', background: '#dc2626', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>رفض</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Message Modal */}
+      {messageModal && (
+        <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setMessageModal(null); }}>
+          <div style={{ ...modalBox, maxWidth: 420 }}>
+            <div style={{ padding: '16px 20px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>إرسال رسالة لولي الأمر</h3>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ background: '#f9fafb', padding: 10, borderRadius: 8, marginBottom: 12 }}>
+                <p style={{ fontWeight: 700, margin: 0 }}>{messageModal.studentName}</p>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>ولي الأمر: {messageModal.parentName || '-'}</p>
+              </div>
+              <textarea value={customMessage} onChange={(e) => setCustomMessage(e.target.value)} rows={4} placeholder="اكتب رسالتك هنا..."
+                style={{ width: '100%', padding: 10, border: '2px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setMessageModal(null)} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+              <button onClick={handleSendMessage} disabled={actionLoading} style={{ padding: '8px 20px', background: '#2563eb', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>📱 إرسال</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ============================================================
+// Approved Tab — Enhanced with excused filters, sort, all print types
+// ============================================================
+const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow[]; onRefresh: () => void; settings: any }> = ({ records, dailyRecords, onRefresh, settings }) => {
   const [search, setSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
+  const [sortMode, setSortMode] = useState('desc');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-  const [detailStudent, setDetailStudent] = useState<{ studentId: number; studentName: string } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [sending, setSending] = useState(false);
 
   const filtered = useMemo(() => {
     let list = records;
-    if (gradeFilter) list = list.filter((r) => r.grade === gradeFilter);
-    if (classFilter) list = list.filter((r) => r.className === classFilter);
-    if (search) { const q = search.toLowerCase(); list = list.filter((r) => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q)); }
+    if (gradeFilter) list = list.filter(r => r.grade === gradeFilter);
+    if (classFilter) list = list.filter(r => r.className === classFilter);
+    if (search) { const q = search.toLowerCase(); list = list.filter(r => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q)); }
     switch (levelFilter) {
-      case 'zero': return list.filter((r) => r.unexcusedDays === 0 && r.excusedDays === 0);
-      case 'warning': return list.filter((r) => r.unexcusedDays >= 3 && r.unexcusedDays <= 4);
-      case 'danger': return list.filter((r) => r.unexcusedDays >= 5 && r.unexcusedDays <= 9);
-      case 'critical': return list.filter((r) => r.unexcusedDays >= 10);
+      case 'zero': return list.filter(r => r.unexcusedDays === 0 && r.excusedDays === 0);
+      case 'warning': return list.filter(r => r.unexcusedDays >= 3 && r.unexcusedDays <= 4);
+      case 'danger': return list.filter(r => r.unexcusedDays >= 5 && r.unexcusedDays <= 9);
+      case 'critical': return list.filter(r => r.unexcusedDays >= 10);
+      case 'mo_ref': return list.filter(r => r.excusedDays >= 3 && r.excusedDays <= 4);
+      case 'mo_com': return list.filter(r => r.excusedDays >= 5 && r.excusedDays <= 9);
+      case 'mo_risk': return list.filter(r => r.excusedDays >= 10);
       default: return list;
     }
   }, [records, gradeFilter, classFilter, search, levelFilter]);
 
-  const grades = useMemo(() => Array.from(new Set(records.map((r) => r.grade))).sort(), [records]);
-  const classes = useMemo(() => Array.from(new Set(records.filter((r) => !gradeFilter || r.grade === gradeFilter).map((r) => r.className))).sort(), [records, gradeFilter]);
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      if (sortMode === 'alpha') return a.studentName.localeCompare(b.studentName, 'ar');
+      const tA = a.unexcusedDays + a.excusedDays, tB = b.unexcusedDays + b.excusedDays;
+      return sortMode === 'asc' ? tA - tB : tB - tA;
+    });
+  }, [filtered, sortMode]);
+
+  const grades = useMemo(() => Array.from(new Set(records.map(r => r.grade))).sort(), [records]);
+  const classes = useMemo(() => Array.from(new Set(records.filter(r => !gradeFilter || r.grade === gradeFilter).map(r => r.className))).sort(), [records, gradeFilter]);
 
   const getAttendance = (r: CumulativeRow) => Math.max(0, Math.round(((SCHOOL_DAYS - r.totalDays) / SCHOOL_DAYS) * 100));
   const getBadge = (u: number) => {
@@ -420,267 +1017,204 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
     return null;
   };
 
-  const toggleSelect = (id: number) => setSelected((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const toggleSelectAll = () => { if (selected.size === filtered.length) setSelected(new Set()); else setSelected(new Set(filtered.map((r) => r.studentId))); };
+  const toggleSelect = (id: number) => setSelected(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleSelectAll = () => { if (selected.size === sorted.length) setSelected(new Set()); else setSelected(new Set(sorted.map(r => r.studentId))); };
+  const selectedRecords = useMemo(() => sorted.filter(r => selected.has(r.studentId)), [sorted, selected]);
 
-  const selectedRecords = useMemo(() => filtered.filter((r) => selected.has(r.studentId)), [filtered, selected]);
-
+  // Print functions
   const handlePrint = () => {
-    const pw = window.open('', '_blank'); if (!pw) return;
-    const sorted = [...filtered].sort((a, b) => `${a.grade}${a.className}`.localeCompare(`${b.grade}${b.className}`));
-    let prevClass = '';
-    const rows = sorted.map((r, i) => {
-      const classKey = `${r.grade} (${r.className})`;
-      let separator = '';
-      if (classKey !== prevClass) { prevClass = classKey; separator = `<tr style="background:#f0f0f0;font-weight:700"><td colspan="7">${classKey}</td></tr>`; }
-      return `${separator}<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.studentNumber}</td><td>${r.unexcusedDays}</td><td>${r.excusedDays}</td><td>${r.totalDays}</td><td>${getAttendance(r)}%</td></tr>`;
-    }).join('');
-    pw.document.write(`<html dir="rtl"><head><title>كشف متابعة الغياب</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#e5e7eb}h2{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>كشف متابعة الغياب</h2><p style="text-align:center">العدد: ${filtered.length}</p>
-      <table><thead><tr><th>#</th><th>الطالب</th><th>الرقم</th><th>بدون عذر</th><th>بعذر</th><th>الإجمالي</th><th>المواظبة</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
+    if (sorted.length === 0) { showError('لا توجد بيانات'); return; }
+    const { hijri } = getTodayDates();
+    const rows = sorted.map((r, i) => `<tr><td>${toIndic(i + 1)}</td><td>${escapeHtml(r.studentName)}</td><td>${formatClass(r.grade, r.className)}</td><td style="font-weight:bold;color:#dc2626">${r.unexcusedDays}</td><td style="color:#2563eb">${r.excusedDays}</td><td style="font-weight:bold">${r.totalDays}</td><td>${getAttendance(r)}%</td></tr>`).join('');
+    const pw = openPrintWindow(`<html dir="rtl"><head><style>${getSharedPrintCSS()}</style></head><body>${buildLetterheadHtml(settings)}<h2 style="text-align:center">كشف متابعة الغياب</h2><p style="text-align:center">${hijri} | العدد: ${toIndic(sorted.length)}</p><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#ea580c;color:white"><th>م</th><th>الطالب</th><th>الصف</th><th>بدون عذر</th><th>بعذر</th><th>الإجمالي</th><th>المواظبة</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    if (pw) { pw.document.close(); setTimeout(() => pw.print(), 300); }
   };
 
-  // Individual pledge form (تعهد فردي)
-  const handlePrintPledge = (r: CumulativeRow) => {
-    const pw = window.open('', '_blank'); if (!pw) return;
-    pw.document.write(`<html dir="rtl"><head><title>تعهد التزام بالحضور</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:40px;direction:rtl}h2{text-align:center;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:10px;text-align:right}th{background:#f0f0f0}.sig{margin-top:60px;display:flex;justify-content:space-between}.sig div{text-align:center;width:30%}.sig div span{display:block;margin-top:40px;border-top:1px solid #333;padding-top:5px}@media print{body{padding:20px}}</style></head>
-      <body>
-      <h2>تعهد الالتزام بالحضور والمواظبة</h2>
-      <p style="text-align:center;font-size:16px">أنا ولي أمر الطالب / <strong>${r.studentName}</strong></p>
-      <table>
-        <tr><th>اسم الطالب</th><td>${r.studentName}</td><th>رقم الطالب</th><td>${r.studentNumber}</td></tr>
-        <tr><th>الصف</th><td>${r.grade}</td><th>الفصل</th><td>${r.className}</td></tr>
-        <tr><th>أيام الغياب بدون عذر</th><td style="font-size:16pt;font-weight:700;color:#dc2626;text-align:center">${r.unexcusedDays}</td><th>أيام الغياب بعذر</th><td style="font-size:16pt;font-weight:700;color:#2563eb;text-align:center">${r.excusedDays}</td></tr>
-      </table>
-      <p style="margin-top:20px;line-height:2">أتعهد أنا ولي أمر الطالب المذكور أعلاه بمتابعة ابني والتزامه بالحضور وعدم الغياب بدون عذر مقبول، وفي حال تكرار الغياب أتحمل المسؤولية كاملة، وأعلم بأن تكرار الغياب يعرض ابني للإجراءات النظامية وفق لائحة السلوك والمواظبة.</p>
-      <div class="sig">
-        <div>الطالب<span>التوقيع</span></div>
-        <div>ولي الأمر<span>التوقيع</span></div>
-        <div>وكيل شؤون الطلاب<span>التوقيع</span></div>
-      </div>
-      </body></html>`);
-    pw.document.close(); pw.print();
+  const handlePrintDiscipline = () => {
+    const disciplined = sorted.filter(r => r.unexcusedDays === 0 && r.excusedDays === 0);
+    if (disciplined.length === 0) { showError('لا يوجد طلاب بصفر غياب'); return; }
+    const { hijri } = getTodayDates();
+    const rows = disciplined.map((r, i) => `<tr><td>${toIndic(i + 1)}</td><td>${escapeHtml(r.studentName)}</td><td>${formatClass(r.grade, r.className)}</td></tr>`).join('');
+    const pw = openPrintWindow(`<html dir="rtl"><head><style>${getSharedPrintCSS()}</style></head><body>${buildLetterheadHtml(settings)}<h2 style="text-align:center">كشف المتميزين بالانضباط</h2><p style="text-align:center">${hijri}</p><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#16a34a;color:white"><th style="width:8%">م</th><th style="width:55%">الطالب</th><th style="width:20%">الصف</th></tr></thead><tbody>${rows}</tbody></table><p style="text-align:center;font-weight:bold">${toIndic(disciplined.length)} طالب</p></body></html>`);
+    if (pw) { pw.document.close(); setTimeout(() => pw.print(), 300); }
   };
 
-  // Individual referral form (إحالة فردي)
-  const handlePrintReferral = (r: CumulativeRow) => {
-    const pw = window.open('', '_blank'); if (!pw) return;
-    pw.document.write(`<html dir="rtl"><head><title>إحالة طالب - غياب</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:40px;direction:rtl}h2{text-align:center;margin-bottom:10px}h4{text-align:center;color:#666;margin-top:0}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:10px;text-align:right}th{background:#f0f0f0}.sec{margin-top:30px;padding:16px;border:1px solid #999;border-radius:8px}.sig{margin-top:50px;display:flex;justify-content:space-between}.sig div{text-align:center;width:30%}.sig div span{display:block;margin-top:40px;border-top:1px solid #333;padding-top:5px}@media print{body{padding:20px}}</style></head>
-      <body>
-      <div style="text-align:left;font-size:12px;color:#999">(سري)</div>
-      <h2>نموذج إحالة طالب إلى الموجه الطلابي</h2>
-      <h4>(غياب وتأخر دراسي)</h4>
-      <table>
-        <tr><th>اسم الطالب</th><td>${r.studentName}</td><th>رقم الطالب</th><td>${r.studentNumber}</td></tr>
-        <tr><th>الصف</th><td>${r.grade}</td><th>الفصل</th><td>${r.className}</td></tr>
-        <tr><th>أيام الغياب بدون عذر</th><td>${r.unexcusedDays} أيام</td><th>أيام الغياب بعذر</th><td>${r.excusedDays} أيام</td></tr>
-      </table>
-      <p><strong>سبب الإحالة:</strong> تكرار غياب الطالب وتأثيره السلبي على مستواه الدراسي والسلوكي</p>
-      <div class="sec">
-        <p style="font-weight:700;margin:0 0 12px">ما تم حيال الطالب من الموجه الطلابي:</p>
-        <div style="min-height:80px;border-bottom:1px dotted #999"></div>
-      </div>
-      <div class="sig">
-        <div>وكيل شؤون الطلاب<span>التوقيع</span></div>
-        <div>الموجه الطلابي<span>التوقيع</span></div>
-        <div>مدير المدرسة<span>التوقيع</span></div>
-      </div>
-      </body></html>`);
-    pw.document.close(); pw.print();
+  const handlePrintContactReport = () => {
+    const sent = sorted.filter(r => (r as any).sentCount > 0 || dailyRecords.some(d => d.studentId === r.studentId && d.isSent));
+    if (sent.length === 0) { showError('لا يوجد سجلات تم إرسالها'); return; }
+    const { hijri } = getTodayDates();
+    const rows = sent.map((r, i) => `<tr><td>${toIndic(i + 1)}</td><td>${escapeHtml(r.studentName)}</td><td>${formatClass(r.grade, r.className)}</td><td>${r.totalDays}</td><td>${r.unexcusedDays}</td><td>${r.excusedDays}</td><td style="color:green;font-weight:bold">تم</td></tr>`).join('');
+    const pw = openPrintWindow(`<html dir="rtl"><head><style>${getSharedPrintCSS()}</style></head><body>${buildLetterheadHtml(settings)}<h2 style="text-align:center">تقرير التواصل مع أولياء الأمور</h2><p style="text-align:center">${hijri}</p><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#0891b2;color:white"><th>م</th><th>الطالب</th><th>الصف</th><th>إجمالي</th><th>بدون عذر</th><th>بعذر</th><th>التواصل</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    if (pw) { pw.document.close(); setTimeout(() => pw.print(), 300); }
   };
 
-  // Group pledge form (تعهد جماعي)
-  const handlePrintGroupPledge = () => {
-    if (selectedRecords.length === 0) { showError('لم يتم تحديد طلاب'); return; }
-    const pw = window.open('', '_blank'); if (!pw) return;
-    const rows = selectedRecords.map((r, i) =>
-      `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.grade} (${r.className})</td><td>${r.unexcusedDays}</td><td>${r.excusedDays}</td><td></td></tr>`
-    ).join('');
-    pw.document.write(`<html dir="rtl"><head><title>كشف تعهد جماعي</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:40px;direction:rtl}h2{text-align:center;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}.sig{margin-top:50px;display:flex;justify-content:space-around}.sig div{text-align:center}.sig div span{display:block;margin-top:40px;border-top:1px solid #333;padding-top:5px}@media print{body{padding:20px}}</style></head>
-      <body>
-      <h2>كشف تعهد الالتزام بالحضور والمواظبة</h2>
-      <p style="text-align:center">عدد الطلاب: <strong>${selectedRecords.length}</strong></p>
-      <table>
-        <thead><tr><th>م</th><th>اسم الطالب</th><th>الصف/الفصل</th><th>بدون عذر</th><th>بعذر</th><th>توقيع الطالب</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div class="sig">
-        <div>وكيل شؤون الطلاب<span>التوقيع</span></div>
-      </div>
-      </body></html>`);
-    pw.document.close(); pw.print();
+  // Print individual forms
+  const handlePrintForm = (formId: FormId, r: CumulativeRow) => {
+    const data: PrintFormData = {
+      studentName: r.studentName, grade: `${r.grade} / ${r.className}`,
+      unexcusedDays: r.unexcusedDays, excusedDays: r.excusedDays,
+      violationDate: new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura'),
+      violationDay: new Date().toLocaleDateString('ar-SA', { weekday: 'long' }),
+    };
+    printForm(formId, data, settings);
   };
 
-  // Group referral form (إحالة جماعية)
-  const handlePrintGroupReferral = () => {
-    if (selectedRecords.length === 0) { showError('لم يتم تحديد طلاب'); return; }
-    const pw = window.open('', '_blank'); if (!pw) return;
-    const rows = selectedRecords.map((r, i) =>
-      `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.grade} (${r.className})</td><td>${r.unexcusedDays}</td><td>${r.excusedDays}</td><td></td></tr>`
-    ).join('');
-    pw.document.write(`<html dir="rtl"><head><title>كشف إحالة جماعية</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:40px;direction:rtl}h2{text-align:center;margin-bottom:30px}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}.sig{margin-top:50px;display:flex;justify-content:space-around}.sig div{text-align:center}.sig div span{display:block;margin-top:40px;border-top:1px solid #333;padding-top:5px}@media print{body{padding:20px}}</style></head>
-      <body>
-      <h2>نموذج إحالة للموجه الطلابي</h2>
-      <p style="text-align:center">عدد الطلاب: <strong>${selectedRecords.length}</strong></p>
-      <table>
-        <thead><tr><th>م</th><th>اسم الطالب</th><th>الصف/الفصل</th><th>بدون عذر</th><th>بعذر</th><th>ما تم حيال الطالب</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div class="sig">
-        <div>وكيل شؤون الطلاب<span>التوقيع</span></div>
-        <div>الموجه الطلابي<span>التوقيع</span></div>
-      </div>
-      </body></html>`);
-    pw.document.close(); pw.print();
+  // Group print
+  const handleGroupPrint = (formId: FormId) => {
+    if (selectedRecords.length === 0) { showError('حدد طلاب أولاً'); return; }
+    const data: PrintFormData = {
+      studentsList: selectedRecords.map(s => ({ name: s.studentName, grade: s.grade, cls: s.className, unexcused: s.unexcusedDays, excused: s.excusedDays })),
+    };
+    printForm(formId, data, settings);
   };
 
-  // Bulk WhatsApp send from archive
+  // Bulk WhatsApp
   const handleBulkSend = async () => {
     if (selectedRecords.length === 0) return;
-    // Find daily record IDs for selected students (unsent ones)
-    const studentIds = new Set(selectedRecords.map((r) => r.studentId));
-    const unsentIds = dailyRecords.filter((r) => studentIds.has(r.studentId) && !r.isSent).map((r) => r.id);
-    if (unsentIds.length === 0) { showError('لا توجد سجلات غير مرسلة لهؤلاء الطلاب'); return; }
+    const studentIds = new Set(selectedRecords.map(r => r.studentId));
+    const unsentIds = dailyRecords.filter(r => studentIds.has(r.studentId) && !r.isSent).map(r => r.id);
+    if (unsentIds.length === 0) { showError('لا توجد سجلات غير مرسلة'); return; }
     setSending(true);
-    try {
-      const res = await absenceApi.sendWhatsAppBulk(unsentIds);
-      if (res.data?.data) {
-        showSuccess(`تم إرسال ${res.data.data.sentCount} من ${res.data.data.total}`);
-        setSelected(new Set());
-        onRefresh();
-      }
-    } catch { showError('خطأ في الإرسال'); }
-    finally { setSending(false); }
+    try { const res = await absenceApi.sendWhatsAppBulk(unsentIds); if (res.data?.data) { showSuccess(`تم إرسال ${res.data.data.sentCount}`); setSelected(new Set()); onRefresh(); } }
+    catch { showError('خطأ'); } finally { setSending(false); }
   };
+
+  const filterBtns = [
+    { id: 'all', label: 'الكل', bg: '#f3f4f6', color: '#374151' },
+    { id: 'zero', label: '🌟 المنضبطين', bg: '#dcfce7', color: '#15803d' },
+    null, // separator
+    { id: 'warning', label: 'إنذار (3-4)', bg: '#fef9c3', color: '#a16207', group: 'بدون عذر' },
+    { id: 'danger', label: 'لجنة (5-9)', bg: '#ffedd5', color: '#c2410c' },
+    { id: 'critical', label: 'حماية (10+)', bg: '#fee2e2', color: '#dc2626' },
+    null,
+    { id: 'mo_ref', label: 'إحالة موجه (3-4)', bg: '#e0f2fe', color: '#0369a1', group: 'بعذر' },
+    { id: 'mo_com', label: 'لجنة توجيه (5-9)', bg: '#dbeafe', color: '#1d4ed8' },
+    { id: 'mo_risk', label: 'اشتباه إهمال (10+)', bg: '#e0e7ff', color: '#4338ca' },
+  ];
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={handlePrint} style={btnStyle('#4f46e5')}>🖨️ طباعة القوائم</button>
+        <button onClick={handlePrintDiscipline} style={btnStyle('#16a34a')}>🌟 كشف المنضبطين</button>
+        <button onClick={handlePrintContactReport} style={btnStyle('#0891b2')}>📞 تقرير التواصل</button>
+        <button onClick={handleBulkSend} disabled={sending} style={btnStyle('#25d366')}>📱 إرسال</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..."
-          style={{ flex: 1, minWidth: '200px', height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px' }} />
-        <select value={gradeFilter} onChange={(e) => { setGradeFilter(e.target.value); setClassFilter(''); }}
-          style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff' }}>
-          <option value="">كل الصفوف</option>{grades.map((g) => <option key={g} value={g}>{g}</option>)}
+          style={{ flex: 1, minWidth: 150, height: 36, padding: '0 10px', border: '2px solid #d1d5db', borderRadius: 10, fontSize: 13 }} />
+        <select value={gradeFilter} onChange={(e) => { setGradeFilter(e.target.value); setClassFilter(''); }} style={selectStyle}>
+          <option value="">كل الصفوف</option>{grades.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
-        <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}
-          style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff' }}>
-          <option value="">كل الفصول</option>{classes.map((c) => <option key={c} value={c}>{c}</option>)}
+        <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={selectStyle}>
+          <option value="">كل الفصول</option>{classes.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <button onClick={handlePrint} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
-        <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '2px' }}>
-          <button onClick={() => setViewMode('cards')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>🎴 بطاقات</button>
-          <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>📋 جدول</button>
+        <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={selectStyle}>
+          <option value="desc">الأكثر غياباً</option><option value="asc">الأقل غياباً</option><option value="alpha">أبجدياً</option>
+        </select>
+        <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', borderRadius: 8, padding: 2 }}>
+          <button onClick={() => setViewMode('cards')} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: 13 }}>🎴</button>
+          <button onClick={() => setViewMode('table')} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: 13 }}>📋</button>
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
+      {/* Level filters */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {filterBtns.map((f, i) => {
+          if (!f) return <span key={`sep-${i}`} style={{ width: 1, height: 20, background: '#d1d5db', margin: '0 4px' }} />;
+          if (f.group) return (
+            <React.Fragment key={f.id}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: f.color, background: f.bg, padding: '2px 6px', borderRadius: 4, border: `1px solid ${f.color}20` }}>{f.group}:</span>
+              <button onClick={() => setLevelFilter(f.id)} style={{ padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: levelFilter === f.id ? f.bg : '#f9fafb', color: levelFilter === f.id ? f.color : '#6b7280', border: levelFilter === f.id ? `2px solid ${f.color}` : '1px solid #e5e7eb' }}>{f.label}</button>
+            </React.Fragment>
+          );
+          return <button key={f.id} onClick={() => setLevelFilter(f.id)} style={{ padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: levelFilter === f.id ? f.bg : '#f9fafb', color: levelFilter === f.id ? f.color : '#6b7280', border: levelFilter === f.id ? `2px solid ${f.color}` : '1px solid #e5e7eb' }}>{f.label}</button>;
+        })}
+      </div>
+
+      {/* Bulk bar */}
       {selected.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', background: '#fff7ed', borderRadius: '10px', marginBottom: '12px', border: '1px solid #fed7aa', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, color: '#ea580c' }}>تم تحديد {selected.size} طالب</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#1f2937', color: '#fff', borderRadius: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, color: '#f97316' }}>{selected.size} طالب</span>
           <div style={{ flex: 1 }} />
-          <button onClick={handlePrintGroupPledge} style={{ padding: '6px 14px', background: '#6366f1', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>📄 كشف تعهد</button>
-          <button onClick={handlePrintGroupReferral} style={{ padding: '6px 14px', background: '#7c3aed', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>📤 كشف إحالة</button>
-          <button onClick={handleBulkSend} disabled={sending} style={{ padding: '6px 14px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer', fontSize: '12px', opacity: sending ? 0.6 : 1 }}>
-            {sending ? '⏳ جاري الإرسال...' : '📱 إرسال واتساب'}
-          </button>
-          <button onClick={() => setSelected(new Set())} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px' }}>إلغاء</button>
+          <button onClick={() => handleGroupPrint('group_tahood')} style={{ padding: '4px 12px', background: '#16a34a', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}>📄 كشف تعهد</button>
+          <button onClick={() => handleGroupPrint('group_ehala')} style={{ padding: '4px 12px', background: '#7c3aed', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}>📤 كشف إحالة</button>
+          <button onClick={handleBulkSend} disabled={sending} style={{ padding: '4px 12px', background: '#25d366', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer', fontSize: 11 }}>📱 واتساب</button>
+          <button onClick={() => setSelected(new Set())} style={{ padding: '4px 8px', background: '#374151', color: '#9ca3af', borderRadius: 6, border: 'none', cursor: 'pointer' }}>✕</button>
         </div>
       )}
 
-      {/* Level Filters */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        {[
-          { id: 'all', label: 'الكل', bg: '#f3f4f6', color: '#374151' },
-          { id: 'zero', label: 'المنضبطين', bg: '#dcfce7', color: '#15803d' },
-          { id: 'warning', label: 'إنذار (3-4)', bg: '#fef9c3', color: '#a16207' },
-          { id: 'danger', label: 'لجنة (5-9)', bg: '#ffedd5', color: '#c2410c' },
-          { id: 'critical', label: 'حماية (10+)', bg: '#fee2e2', color: '#dc2626' },
-        ].map((f) => (
-          <button key={f.id} onClick={() => setLevelFilter(f.id)} style={{
-            padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-            background: levelFilter === f.id ? f.bg : '#f9fafb',
-            color: levelFilter === f.id ? f.color : '#6b7280',
-            border: levelFilter === f.id ? `2px solid ${f.color}` : '1px solid #e5e7eb',
-          }}>{f.label}</button>
-        ))}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#9ca3af' }}><p style={{ fontSize: '48px' }}>📋</p><p style={{ fontSize: '18px', fontWeight: 500 }}>لا توجد سجلات</p></div>
+      {/* Content */}
+      {sorted.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          <span style={{ fontSize: 50, color: '#d1d5db' }}>📋</span>
+          <p style={{ color: '#6b7280', marginTop: 12 }}>لا توجد سجلات مطابقة</p>
+        </div>
       ) : viewMode === 'cards' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-          {filtered.map((r) => {
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          {sorted.map(r => {
+            const u = r.unexcusedDays, e = r.excusedDays, l = r.lateDays;
             const att = getAttendance(r);
-            const badge = getBadge(r.unexcusedDays);
-            const isSel = selected.has(r.studentId);
+            const badge = getBadge(u);
+            let actions: React.ReactNode[] = [];
+            if (u >= 3 || e >= 3) actions.push(<button key="ref" onClick={() => handlePrintForm('ehalat_absence', r)} style={cardBtn('#3b82f6', '#eff6ff')}>📤 تحويل للموجه</button>);
+            if (u >= 3) {
+              actions.push(<button key="rec" onClick={() => handlePrintForm('ghiab_bidon_ozr', r)} style={cardBtn('#4b5563', '#f9fafb')}>📋 سجل بدون عذر</button>);
+              actions.push(<button key="com" onClick={() => handlePrintForm('tahood_hodoor', r)} style={cardBtn('#16a34a', '#dcfce7')}>✅ نموذج عذر</button>);
+            }
+            if (e >= 3) actions.push(<button key="exc" onClick={() => handlePrintForm('ghiab_ozr', r)} style={cardBtn('#0891b2', '#ecfeff')}>📋 سجل بعذر</button>);
+            if (u >= 5) actions.push(<button key="laj" onClick={() => handlePrintForm('mahdar_lajnah_absence', r)} style={cardBtn('#7c3aed', '#f3e8ff')}>👥 لجنة توجيه</button>);
+
             return (
-              <div key={r.studentId}
-                style={{ background: isSel ? '#fff7ed' : '#fff', borderRadius: '12px', border: `2px solid ${isSel ? '#f97316' : badge ? badge.color + '60' : '#e5e7eb'}`, padding: '16px', transition: 'box-shadow 0.2s', position: 'relative' }}
-                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)')}
-                onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}>
-                {/* Checkbox */}
-                <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <input type="checkbox" checked={isSel} onChange={() => toggleSelect(r.studentId)} onClick={(e) => e.stopPropagation()} />
-                  {badge && <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '10px', fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.text}</span>}
+              <div key={r.studentId} style={{ background: '#fff', borderRadius: 14, border: `2px solid ${badge ? badge.color + '40' : '#e5e7eb'}`, padding: 16, position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: att >= 95 ? '#16a34a' : att >= 90 ? '#ca8a04' : '#dc2626' }}>%{att}</span>
                 </div>
-                {/* Attendance */}
-                <div style={{ position: 'absolute', top: '12px', left: '12px' }}>
-                  <span style={{ fontSize: '20px', fontWeight: 800, color: att >= 95 ? '#15803d' : att >= 90 ? '#ca8a04' : '#dc2626' }}>{att}%</span>
+                {badge && <span style={{ position: 'absolute', top: 12, right: 12, fontSize: 10, fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: 10, border: `1px solid ${badge.color}40` }}>{badge.text}</span>}
+                <div style={{ marginTop: 32, marginBottom: 12 }}>
+                  <h3 style={{ fontWeight: 700, color: '#1f2937', fontSize: 14 }}>{r.studentName}</h3>
+                  <p style={{ fontSize: 12, color: '#6b7280' }}>{r.grade}/{r.className}</p>
                 </div>
-                <div style={{ marginTop: '36px', marginBottom: '12px', cursor: 'pointer' }} onClick={() => setDetailStudent({ studentId: r.studentId, studentName: r.studentName })}>
-                  <div style={{ fontWeight: 700, fontSize: '15px' }}>{r.studentName}</div>
-                  <div style={{ fontSize: '13px', color: '#6b7280' }}>{r.grade} ({r.className})</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, textAlign: 'center', marginBottom: 12 }}>
+                  <div><p style={{ fontSize: 18, fontWeight: 800, color: '#dc2626' }}>{u}</p><p style={{ fontSize: 9, color: '#6b7280' }}>بدون عذر</p></div>
+                  <div><p style={{ fontSize: 18, fontWeight: 800, color: '#2563eb' }}>{e}</p><p style={{ fontSize: 9, color: '#6b7280' }}>بعذر</p></div>
+                  <div><p style={{ fontSize: 18, fontWeight: 800, color: '#f59e0b' }}>{l}</p><p style={{ fontSize: 9, color: '#6b7280' }}>تأخر</p></div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', textAlign: 'center', marginBottom: '12px' }}>
-                  <div><div style={{ fontSize: '18px', fontWeight: 800, color: '#dc2626' }}>{r.unexcusedDays}</div><div style={{ fontSize: '10px', color: '#9ca3af' }}>بدون عذر</div></div>
-                  <div><div style={{ fontSize: '18px', fontWeight: 800, color: '#2563eb' }}>{r.excusedDays}</div><div style={{ fontSize: '10px', color: '#9ca3af' }}>بعذر</div></div>
-                  <div><div style={{ fontSize: '18px', fontWeight: 800, color: '#ca8a04' }}>{r.lateDays}</div><div style={{ fontSize: '10px', color: '#9ca3af' }}>تأخر</div></div>
-                </div>
-                {/* Form Buttons */}
-                <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid #f3f4f6', paddingTop: '10px' }}>
-                  <button onClick={(e) => { e.stopPropagation(); handlePrintPledge(r); }} style={{ flex: 1, padding: '5px', background: '#eef2ff', color: '#4f46e5', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '11px' }}>📄 تعهد</button>
-                  <button onClick={(e) => { e.stopPropagation(); handlePrintReferral(r); }} style={{ flex: 1, padding: '5px', background: '#f5f3ff', color: '#7c3aed', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '11px' }}>📤 إحالة</button>
-                  <button onClick={(e) => { e.stopPropagation(); setDetailStudent({ studentId: r.studentId, studentName: r.studentName }); }} style={{ flex: 1, padding: '5px', background: '#fef2f2', color: '#ea580c', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '11px' }}>عرض</button>
-                </div>
+                {actions.length > 0 && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{actions}</div>}
               </div>
             );
           })}
         </div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-          <table className="data-table">
-            <thead><tr>
-              <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} /></th>
-              <th>الطالب</th><th>الصف</th><th>بدون عذر</th><th>بعذر</th><th>تأخر</th><th>المواظبة</th><th>الإجراء</th><th style={{ textAlign: 'center' }}>نماذج / تفاصيل</th>
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ background: '#f9fafb' }}>
+              <th style={{ padding: 8, width: 30 }}><input type="checkbox" checked={selected.size === sorted.length && sorted.length > 0} onChange={toggleSelectAll} /></th>
+              <th style={{ padding: 8, textAlign: 'right' }}>الطالب</th><th style={{ padding: 8 }}>الصف</th>
+              <th style={{ padding: 8, textAlign: 'center', color: '#dc2626', width: 60 }}>بدون عذر</th>
+              <th style={{ padding: 8, textAlign: 'center', color: '#2563eb', width: 60 }}>بعذر</th>
+              <th style={{ padding: 8, textAlign: 'center', width: 60 }}>المواظبة</th>
+              <th style={{ padding: 8, textAlign: 'center', width: 70 }}>إجراء</th>
             </tr></thead>
             <tbody>
-              {filtered.map((r) => {
+              {sorted.map(r => {
                 const att = getAttendance(r);
-                const badge = getBadge(r.unexcusedDays);
+                let action = '-';
+                if (r.unexcusedDays >= 10) action = 'حماية';
+                else if (r.unexcusedDays >= 5) action = 'لجنة';
+                else if (r.unexcusedDays >= 3) action = 'تعهد';
                 return (
-                  <tr key={r.studentId} style={{ background: selected.has(r.studentId) ? '#fff7ed' : undefined }}>
-                    <td><input type="checkbox" checked={selected.has(r.studentId)} onChange={() => toggleSelect(r.studentId)} /></td>
-                    <td style={{ fontWeight: 700 }}>{r.studentName}</td>
-                    <td>{r.grade} ({r.className})</td>
-                    <td style={{ fontWeight: 700, color: r.unexcusedDays > 0 ? '#dc2626' : '#d1d5db' }}>{r.unexcusedDays}</td>
-                    <td style={{ fontWeight: 700, color: r.excusedDays > 0 ? '#2563eb' : '#d1d5db' }}>{r.excusedDays}</td>
-                    <td>{r.lateDays}</td>
-                    <td style={{ fontWeight: 700, color: att >= 95 ? '#15803d' : att >= 90 ? '#ca8a04' : '#dc2626' }}>{att}%</td>
-                    <td>{badge ? <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '11px', fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.text}</span> : '-'}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                        <button onClick={() => handlePrintPledge(r)} title="تعهد" style={{ padding: '4px 6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>📄</button>
-                        <button onClick={() => handlePrintReferral(r)} title="إحالة" style={{ padding: '4px 6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>📤</button>
-                        <button onClick={() => setDetailStudent({ studentId: r.studentId, studentName: r.studentName })}
-                          style={{ padding: '4px 12px', background: '#fef2f2', color: '#ea580c', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>عرض</button>
-                      </div>
-                    </td>
+                  <tr key={r.studentId} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: 8 }}><input type="checkbox" checked={selected.has(r.studentId)} onChange={() => toggleSelect(r.studentId)} /></td>
+                    <td style={{ padding: 8, fontWeight: 700 }}>{r.studentName}</td>
+                    <td style={{ padding: 8, fontSize: 12 }}>{r.grade} / {r.className}</td>
+                    <td style={{ padding: 8, textAlign: 'center', fontWeight: 700, color: r.unexcusedDays > 0 ? '#dc2626' : '#d1d5db' }}>{r.unexcusedDays}</td>
+                    <td style={{ padding: 8, textAlign: 'center', fontWeight: 700, color: r.excusedDays > 0 ? '#2563eb' : '#d1d5db' }}>{r.excusedDays}</td>
+                    <td style={{ padding: 8, textAlign: 'center', fontWeight: 700, color: att >= 95 ? '#16a34a' : att >= 90 ? '#ca8a04' : '#dc2626', fontSize: 12 }}>%{att}</td>
+                    <td style={{ padding: 8, textAlign: 'center', fontSize: 11, fontWeight: 700, color: r.unexcusedDays >= 10 ? '#dc2626' : r.unexcusedDays >= 5 ? '#ea580c' : r.unexcusedDays >= 3 ? '#ca8a04' : '#9ca3af' }}>{action}</td>
                   </tr>
                 );
               })}
@@ -688,207 +1222,123 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
           </table>
         </div>
       )}
-
-      {detailStudent && (
-        <StudentDetailModal studentName={detailStudent.studentName} records={dailyRecords.filter((r) => r.studentId === detailStudent.studentId)}
-          cumulative={records.find((r) => r.studentId === detailStudent.studentId)} onClose={() => setDetailStudent(null)} onRefresh={onRefresh} />
-      )}
     </>
   );
 };
 
 // ============================================================
-// Student Detail Modal
+// Reports Tab — Enhanced with grade/class filters
 // ============================================================
-const StudentDetailModal: React.FC<{ studentName: string; records: AbsenceRow[]; cumulative?: CumulativeRow; onClose: () => void; onRefresh: () => void }> = ({ studentName, records, cumulative, onClose, onRefresh }) => {
-  const [editing, setEditing] = useState(false);
-  const [editValues, setEditValues] = useState({ excusedDays: cumulative?.excusedDays || 0, unexcusedDays: cumulative?.unexcusedDays || 0, lateDays: cumulative?.lateDays || 0 });
-  const [saving, setSaving] = useState(false);
-
-  const handleSendAll = async () => {
-    const unsent = records.filter((r) => !r.isSent);
-    if (unsent.length === 0) { showError('جميع السجلات تم إرسالها'); return; }
-    try { const res = await absenceApi.sendWhatsAppBulk(unsent.map((r) => r.id)); if (res.data?.data) { showSuccess(`تم إرسال ${res.data.data.sentCount}`); onRefresh(); } } catch { showError('خطأ'); }
-  };
-
-  const handleSaveCumulative = async () => {
-    if (!cumulative) return;
-    setSaving(true);
-    try {
-      await absenceApi.updateCumulative(cumulative.studentId, editValues);
-      showSuccess('تم تحديث الغياب التراكمي');
-      setEditing(false);
-      onRefresh();
-    } catch { showError('خطأ في التحديث'); }
-    finally { setSaving(false); }
-  };
-
-  const att = cumulative ? Math.max(0, Math.round(((SCHOOL_DAYS - cumulative.totalDays) / SCHOOL_DAYS) * 100)) : 100;
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '750px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #fef2f2, #fee2e2)', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{studentName}</h3>
-            <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-              <span>بدون عذر: <strong style={{ color: '#dc2626' }}>{cumulative?.unexcusedDays || 0}</strong></span>
-              <span>بعذر: <strong style={{ color: '#2563eb' }}>{cumulative?.excusedDays || 0}</strong></span>
-              <span>المواظبة: <strong style={{ color: att >= 95 ? '#15803d' : '#dc2626' }}>{att}%</strong></span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleSendAll} style={{ padding: '6px 12px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>📱 إرسال الكل</button>
-            <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
-          </div>
-        </div>
-        <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1 }}>
-          {cumulative && (
-            <div style={{ background: '#fef2f2', borderRadius: '10px', padding: '16px', marginBottom: '16px', border: '1px solid #fecaca' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editing ? '12px' : 0 }}>
-                <span style={{ fontWeight: 700, fontSize: '14px', color: '#ea580c' }}>الغياب التراكمي</span>
-                {!editing ? (
-                  <button onClick={() => { setEditValues({ excusedDays: cumulative.excusedDays, unexcusedDays: cumulative.unexcusedDays, lateDays: cumulative.lateDays }); setEditing(true); }}
-                    style={{ padding: '4px 12px', background: '#fff', color: '#ea580c', borderRadius: '6px', border: '1px solid #fecaca', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}>✏️ تعديل</button>
-                ) : (
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={handleSaveCumulative} disabled={saving}
-                      style={{ padding: '4px 12px', background: '#15803d', color: '#fff', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '12px', opacity: saving ? 0.6 : 1 }}>{saving ? '...' : '💾 حفظ'}</button>
-                    <button onClick={() => setEditing(false)} style={{ padding: '4px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px' }}>إلغاء</button>
-                  </div>
-                )}
-              </div>
-              {editing && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                  {[
-                    { key: 'unexcusedDays' as const, label: 'بدون عذر', color: '#dc2626' },
-                    { key: 'excusedDays' as const, label: 'بعذر', color: '#2563eb' },
-                    { key: 'lateDays' as const, label: 'تأخر', color: '#ca8a04' },
-                  ].map((f) => (
-                    <div key={f.key} style={{ textAlign: 'center' }}>
-                      <label style={{ fontSize: '11px', color: f.color, fontWeight: 700 }}>{f.label}</label>
-                      <input type="number" min={0} value={editValues[f.key]} onChange={(e) => setEditValues((p) => ({ ...p, [f.key]: parseInt(e.target.value) || 0 }))}
-                        style={{ width: '100%', height: '32px', textAlign: 'center', border: '2px solid #d1d5db', borderRadius: '6px', fontSize: '14px', fontWeight: 700, marginTop: '4px' }} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <table className="data-table">
-            <thead><tr><th>التاريخ</th><th>اليوم</th><th>النوع</th><th>العذر</th><th>الحالة</th><th>الإرسال</th></tr></thead>
-            <tbody>
-              {records.map((r) => (
-                <tr key={r.id}>
-                  <td style={{ fontSize: '13px' }}>{r.hijriDate}</td>
-                  <td>{r.dayName || '-'}</td>
-                  <td><span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 700, background: ABSENCE_TYPES[r.absenceType]?.bg || '#f3f4f6', color: ABSENCE_TYPES[r.absenceType]?.color || '#374151' }}>{ABSENCE_TYPES[r.absenceType]?.label || r.absenceType}</span></td>
-                  <td><span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 700, background: EXCUSE_LABELS[r.excuseType]?.bg || '#f3f4f6', color: EXCUSE_LABELS[r.excuseType]?.color || '#374151' }}>{EXCUSE_LABELS[r.excuseType]?.label || r.excuseType}</span></td>
-                  <td>{r.tardinessStatus === 'متأخر' ? <span style={{ color: '#ca8a04' }}>متأخر {r.arrivalTime}</span> : <span style={{ color: '#dc2626' }}>غائب</span>}</td>
-                  <td>{r.isSent ? <span style={{ color: '#15803d' }}>✅</span> : <span style={{ color: '#9ca3af' }}>—</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================
-// Reports Tab
-// ============================================================
-const ReportsTab: React.FC<{ records: AbsenceRow[]; cumulativeRecords: CumulativeRow[] }> = ({ records, cumulativeRecords }) => {
+const ReportsTab: React.FC<{ records: AbsenceRow[]; cumulativeRecords: CumulativeRow[]; settings: any }> = ({ records, cumulativeRecords, settings }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [gradeFilter, setGradeFilter] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  const grades = useMemo(() => Array.from(new Set(records.map(r => r.grade))).sort(), [records]);
+  const classes = useMemo(() => Array.from(new Set(records.filter(r => !gradeFilter || r.grade === gradeFilter).map(r => r.className))).sort(), [records, gradeFilter]);
 
   const filteredRecords = useMemo(() => {
     let list = records;
-    if (dateFrom) list = list.filter((r) => r.hijriDate >= dateFrom);
-    if (dateTo) list = list.filter((r) => r.hijriDate <= dateTo);
+    if (gradeFilter) list = list.filter(r => r.grade === gradeFilter);
+    if (classFilter) list = list.filter(r => r.className === classFilter);
+    if (typeFilter) list = list.filter(r => typeFilter === 'Excused' ? r.excuseType === 'Excused' : r.excuseType === 'Unexcused');
+    if (dateFrom) list = list.filter(r => r.hijriDate >= dateFrom);
+    if (dateTo) list = list.filter(r => r.hijriDate <= dateTo);
     return list;
-  }, [records, dateFrom, dateTo]);
+  }, [records, dateFrom, dateTo, gradeFilter, classFilter, typeFilter]);
 
-  const topStudents = useMemo(() =>
-    [...cumulativeRecords].sort((a, b) => b.totalDays - a.totalDays).slice(0, 10), [cumulativeRecords]);
-
-  const byClass = useMemo(() => {
-    const g = new Map<string, number>();
-    for (const r of filteredRecords) { const key = `${r.grade} (${r.className})`; g.set(key, (g.get(key) || 0) + 1); }
-    return Array.from(g.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [filteredRecords]);
+  const unexcusedCount = filteredRecords.filter(r => r.excuseType === 'Unexcused').length;
+  const excusedCount = filteredRecords.filter(r => r.excuseType === 'Excused').length;
+  const lateCount = filteredRecords.filter(r => r.tardinessStatus === 'متأخر').length;
 
   const byDay = useMemo(() => {
-    const g = new Map<string, number>();
-    for (const r of filteredRecords) { const key = r.dayName || 'غير محدد'; g.set(key, (g.get(key) || 0) + 1); }
-    return Array.from(g.entries()).map(([day, count]) => ({ day, count })).sort((a, b) => b.count - a.count);
+    const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+    const map: Record<string, number> = {};
+    days.forEach(d => map[d] = 0);
+    filteredRecords.forEach(r => { if (r.dayName && map[r.dayName] !== undefined) map[r.dayName]++; });
+    return days.map(d => ({ day: d, count: map[d] }));
   }, [filteredRecords]);
 
-  const maxByClass = Math.max(...byClass.map((c) => c.count), 1);
-  const excusedCount = filteredRecords.filter((r) => r.excuseType === 'Excused').length;
-  const unexcusedCount = filteredRecords.filter((r) => r.excuseType === 'Unexcused').length;
+  const byClass = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredRecords.forEach(r => { const k = `${r.grade} (${r.className})`; map[k] = (map[k] || 0) + 1; });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  }, [filteredRecords]);
+  const maxByClass = Math.max(...byClass.map(c => c.count), 1);
+
+  const topStudents = useMemo(() => {
+    return [...cumulativeRecords].sort((a, b) => b.totalDays - a.totalDays).slice(0, 15);
+  }, [cumulativeRecords]);
 
   const handlePrint = () => {
-    const pw = window.open('', '_blank'); if (!pw) return;
-    const studentRows = topStudents.map((s, i) => `<tr><td>${i + 1}</td><td>${s.studentName}</td><td>${s.grade} (${s.className})</td><td>${s.unexcusedDays}</td><td>${s.excusedDays}</td><td>${s.totalDays}</td></tr>`).join('');
-    const dateRange = dateFrom || dateTo ? `<p style="text-align:center">الفترة: ${dateFrom || '...'} إلى ${dateTo || '...'}</p>` : '';
-    pw.document.write(`<html dir="rtl"><head><title>تقرير الغياب</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2,h3{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>تقرير الغياب</h2>${dateRange}<p style="text-align:center">الإجمالي: ${filteredRecords.length} | بدون عذر: ${unexcusedCount} | بعذر: ${excusedCount}</p>
-      <h3>أكثر الطلاب غياباً</h3><table><thead><tr><th>#</th><th>الطالب</th><th>الصف</th><th>بدون عذر</th><th>بعذر</th><th>الإجمالي</th></tr></thead><tbody>${studentRows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
+    const { hijri } = getTodayDates();
+    const studentRows = topStudents.map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.studentName)}</td><td>${formatClass(s.grade, s.className)}</td><td style="color:#dc2626;font-weight:bold">${s.unexcusedDays}</td><td style="color:#2563eb">${s.excusedDays}</td><td style="font-weight:bold">${s.totalDays}</td></tr>`).join('');
+    const pw = openPrintWindow(`<html dir="rtl"><head><style>${getSharedPrintCSS()}</style></head><body>${buildLetterheadHtml(settings)}<h2 style="text-align:center">تقرير الغياب</h2><p style="text-align:center">${hijri} | إجمالي: ${filteredRecords.length} | بدون عذر: ${unexcusedCount} | بعذر: ${excusedCount}</p><h3>أكثر الطلاب غياباً</h3><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#ea580c;color:white"><th>#</th><th>الطالب</th><th>الصف</th><th>بدون عذر</th><th>بعذر</th><th>الإجمالي</th></tr></thead><tbody>${studentRows}</tbody></table></body></html>`);
+    if (pw) { pw.document.close(); setTimeout(() => pw.print(), 300); }
   };
 
   return (
     <>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: '#6b7280' }}>الفترة:</span>
-        <input type="text" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="من تاريخ (هجري)"
-          style={{ height: '34px', padding: '0 10px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '13px', width: '140px' }} />
-        <input type="text" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="إلى تاريخ (هجري)"
-          style={{ height: '34px', padding: '0 10px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '13px', width: '140px' }} />
-        {(dateFrom || dateTo) && (
-          <button onClick={() => { setDateFrom(''); setDateTo(''); }}
-            style={{ height: '34px', padding: '0 12px', background: '#fee2e2', color: '#dc2626', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}>مسح</button>
-        )}
-        <div style={{ marginRight: 'auto' }}>
-          <button onClick={handlePrint} style={{ padding: '8px 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة التقرير</button>
+      {/* Filters */}
+      <div style={{ background: '#fff', padding: 16, borderRadius: 12, border: '1px solid #e5e7eb', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>الصف</label>
+            <select value={gradeFilter} onChange={(e) => { setGradeFilter(e.target.value); setClassFilter(''); }} style={selectStyle}><option value="">كل الصفوف</option>{grades.map(g => <option key={g} value={g}>{g}</option>)}</select></div>
+          <div><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>الفصل</label>
+            <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={selectStyle}><option value="">كل الفصول</option>{classes.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+          <div><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>من تاريخ</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '2px solid #d1d5db', borderRadius: 8, fontSize: 13 }} /></div>
+          <div><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>إلى تاريخ</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '2px solid #d1d5db', borderRadius: 8, fontSize: 13 }} /></div>
+          <div><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>نوع الغياب</label>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={selectStyle}><option value="">الكل</option><option value="Excused">بعذر</option><option value="Unexcused">بدون عذر</option></select></div>
+          <button onClick={handlePrint} style={btnStyle('#7c3aed')}>🖨️ طباعة التقرير</button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-        <StatCard label="إجمالي الغياب" value={filteredRecords.length} color="#ea580c" />
-        <StatCard label="بدون عذر" value={unexcusedCount} color="#dc2626" />
-        <StatCard label="بعذر" value={excusedCount} color="#2563eb" />
+      {/* Stats cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <StatCard label="إجمالي الغياب" value={filteredRecords.length} color="#ea580c" icon="📊" />
+        <StatCard label="بدون عذر" value={unexcusedCount} color="#dc2626" icon="❌" />
+        <StatCard label="بعذر" value={excusedCount} color="#2563eb" icon="✅" />
+        <StatCard label="تأخير" value={lateCount} color="#f59e0b" icon="⏰" />
       </div>
 
       {/* By Day */}
-      {byDay.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '20px', marginBottom: '20px' }}>
-          <h4 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700 }}>الغياب حسب اليوم</h4>
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {byDay.map((d) => (
-              <div key={d.day} style={{ textAlign: 'center', padding: '16px', background: '#f9fafb', borderRadius: '12px', minWidth: '80px' }}>
-                <div style={{ fontSize: '24px', fontWeight: 800, color: '#15803d' }}>{d.count}</div>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>{d.day}</div>
-              </div>
-            ))}
+      {byDay.some(d => d.count > 0) && (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 20, marginBottom: 20 }}>
+          <h4 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>📅 الغياب حسب اليوم</h4>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {byDay.map(d => {
+              const max = Math.max(...byDay.map(x => x.count), 1);
+              const pct = Math.round((d.count / max) * 100);
+              return (
+                <div key={d.day} style={{ textAlign: 'center', padding: 16, background: '#f9fafb', borderRadius: 12, minWidth: 80 }}>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#15803d' }}>{d.count}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>{d.day}</div>
+                  <div style={{ width: '100%', height: 4, background: '#e5e7eb', borderRadius: 2, marginTop: 8 }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: '#15803d', borderRadius: 2 }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* By Class */}
       {byClass.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '20px', marginBottom: '20px' }}>
-          <h4 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700 }}>الغياب حسب الفصل</h4>
-          {byClass.slice(0, 10).map((c) => (
-            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-              <span style={{ width: '120px', fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>{c.name}</span>
-              <div style={{ flex: 1, height: '20px', background: '#f3f4f6', borderRadius: '6px', overflow: 'hidden' }}>
-                <div style={{ width: `${(c.count / maxByClass) * 100}%`, height: '100%', background: '#ea580c', borderRadius: '6px' }} />
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 20, marginBottom: 20 }}>
+          <h4 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>🏫 الغياب حسب الفصل</h4>
+          {byClass.slice(0, 10).map(c => (
+            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+              <span style={{ width: 120, fontSize: 13, fontWeight: 600, color: '#4b5563' }}>{c.name}</span>
+              <div style={{ flex: 1, height: 20, background: '#f3f4f6', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ width: `${(c.count / maxByClass) * 100}%`, height: '100%', background: '#ea580c', borderRadius: 6 }} />
               </div>
-              <span style={{ width: '30px', fontSize: '13px', fontWeight: 700 }}>{c.count}</span>
+              <span style={{ width: 30, fontSize: 13, fontWeight: 700 }}>{c.count}</span>
             </div>
           ))}
         </div>
@@ -896,18 +1346,18 @@ const ReportsTab: React.FC<{ records: AbsenceRow[]; cumulativeRecords: Cumulativ
 
       {/* Top Students */}
       {topStudents.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}><h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>أكثر الطلاب غياباً</h4></div>
-          <table className="data-table">
-            <thead><tr><th>#</th><th>الطالب</th><th>الصف</th><th>بدون عذر</th><th>بعذر</th><th>الإجمالي</th><th>المواظبة</th></tr></thead>
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}><h4 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📈 أكثر الطلاب غياباً</h4></div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ background: '#f9fafb' }}><th style={{ padding: 8 }}>#</th><th style={{ padding: 8, textAlign: 'right' }}>الطالب</th><th style={{ padding: 8 }}>الصف</th><th style={{ padding: 8, textAlign: 'center' }}>بدون عذر</th><th style={{ padding: 8, textAlign: 'center' }}>بعذر</th><th style={{ padding: 8, textAlign: 'center' }}>الإجمالي</th><th style={{ padding: 8, textAlign: 'center' }}>المواظبة</th></tr></thead>
             <tbody>
               {topStudents.map((s, i) => {
                 const att = Math.max(0, Math.round(((SCHOOL_DAYS - s.totalDays) / SCHOOL_DAYS) * 100));
-                return (
-                  <tr key={s.studentId}><td style={{ fontWeight: 700, color: '#6b7280' }}>{i + 1}</td><td style={{ fontWeight: 700 }}>{s.studentName}</td><td>{s.grade} ({s.className})</td>
-                    <td style={{ fontWeight: 700, color: '#dc2626' }}>{s.unexcusedDays}</td><td style={{ color: '#2563eb' }}>{s.excusedDays}</td><td style={{ fontWeight: 700 }}>{s.totalDays}</td>
-                    <td style={{ fontWeight: 700, color: att >= 95 ? '#15803d' : att >= 90 ? '#ca8a04' : '#dc2626' }}>{att}%</td></tr>
-                );
+                return (<tr key={s.studentId} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: 8, fontWeight: 700, color: '#6b7280' }}>{i + 1}</td><td style={{ padding: 8, fontWeight: 700 }}>{s.studentName}</td><td style={{ padding: 8 }}>{s.grade} ({s.className})</td>
+                  <td style={{ padding: 8, textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>{s.unexcusedDays}</td><td style={{ padding: 8, textAlign: 'center', color: '#2563eb' }}>{s.excusedDays}</td><td style={{ padding: 8, textAlign: 'center', fontWeight: 700 }}>{s.totalDays}</td>
+                  <td style={{ padding: 8, textAlign: 'center', fontWeight: 700, color: att >= 95 ? '#15803d' : att >= 90 ? '#ca8a04' : '#dc2626' }}>{att}%</td>
+                </tr>);
               })}
             </tbody>
           </table>
@@ -920,31 +1370,47 @@ const ReportsTab: React.FC<{ records: AbsenceRow[]; cumulativeRecords: Cumulativ
 // ============================================================
 // Shared Components
 // ============================================================
-const StatCard: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
-  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-    <span style={{ fontSize: '24px', fontWeight: 800, color }}>{value}</span>
-    <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>{label}</span>
+const StatCard: React.FC<{ label: string; value: number; color: string; icon?: string }> = ({ label, value, color, icon }) => (
+  <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+    {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
+    <span style={{ fontSize: 22, fontWeight: 800, color }}>{value}</span>
+    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>{label}</span>
   </div>
 );
 
 const FilterBtn: React.FC<{ label: string; count: number; active: boolean; onClick: () => void; color: string }> = ({ label, count, active, onClick, color }) => (
-  <button onClick={onClick} style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, background: active ? '#fff' : 'transparent', color: active ? color : '#6b7280', boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', border: 'none', cursor: 'pointer' }}>
-    {label} <span style={{ fontSize: '12px', color: active ? color : '#9ca3af' }}>({count})</span>
+  <button onClick={onClick} style={{ padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, background: active ? '#fff' : 'transparent', color: active ? color : '#6b7280', boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', border: 'none', cursor: 'pointer' }}>
+    {label} <span style={{ fontSize: 11, color: active ? color : '#9ca3af' }}>({count})</span>
   </button>
 );
 
 const ConfirmModal: React.FC<{ title: string; message: string; onConfirm: () => void; onCancel: () => void }> = ({ title, message, onConfirm, onCancel }) => (
-  <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-    <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '400px', padding: '24px' }}>
-      <h3 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 700 }}>{title}</h3>
+  <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+    <div style={{ ...modalBox, maxWidth: 400, padding: 24 }}>
+      <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>{title}</h3>
       <p style={{ margin: '0 0 24px', color: '#4b5563' }}>{message}</p>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
         <button onClick={onCancel} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
-        <button onClick={onConfirm} style={{ padding: '8px 24px', background: '#dc2626', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>تأكيد</button>
+        <button onClick={onConfirm} style={{ padding: '8px 24px', background: '#dc2626', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>تأكيد</button>
       </div>
     </div>
   </div>
 );
+
+const ImportDropdown: React.FC<{ onNoor: () => void; onPlatform: () => void }> = ({ onNoor, onPlatform }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} style={btnStyle('#16a34a')}>📤 استيراد ▾</button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: 10, boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e5e7eb', zIndex: 50, minWidth: 200, overflow: 'hidden' }}>
+          <div onClick={() => { onNoor(); setOpen(false); }} style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}>☁️ استيراد Excel (نور)</div>
+          <div onClick={() => { onPlatform(); setOpen(false); }} style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>📊 استيراد منصة (Excel)</div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ============================================================
 // Add Absence Modal
@@ -962,13 +1428,13 @@ const AddAbsenceModal: React.FC<{ stages: StageConfigData[]; onClose: () => void
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { studentsApi.getAll().then((res) => { if (res.data?.data) setStudents(res.data.data); }); }, []);
+  useEffect(() => { studentsApi.getAll().then(res => { if (res.data?.data) setStudents(res.data.data); }); }, []);
 
   const filteredStudents = useMemo(() => {
     if (!studentSearch.trim()) return [];
     const q = studentSearch.trim().toLowerCase();
-    const ids = new Set(selectedStudents.map((s) => s.id));
-    return students.filter((s) => !ids.has(s.id) && (s.name.toLowerCase().includes(q) || s.studentNumber.includes(q))).slice(0, 10);
+    const ids = new Set(selectedStudents.map(s => s.id));
+    return students.filter(s => !ids.has(s.id) && (s.name.toLowerCase().includes(q) || s.studentNumber.includes(q))).slice(0, 10);
   }, [students, studentSearch, selectedStudents]);
 
   const handleSave = async () => {
@@ -980,7 +1446,7 @@ const AddAbsenceModal: React.FC<{ stages: StageConfigData[]; onClose: () => void
         const res = await absenceApi.add(data);
         if (res.data?.success) { showSuccess('تم تسجيل الغياب'); onSaved(); } else showError(res.data?.message || 'فشل');
       } else {
-        const res = await absenceApi.addBatch(selectedStudents.map((s) => s.id), { absenceType, period, dayName, notes });
+        const res = await absenceApi.addBatch(selectedStudents.map(s => s.id), { absenceType, period, dayName, notes });
         if (res.data?.data) { showSuccess(res.data.data.message || 'تم'); onSaved(); } else showError(res.data?.message || 'فشل');
       }
     } catch { showError('فشل التسجيل'); }
@@ -988,95 +1454,90 @@ const AddAbsenceModal: React.FC<{ stages: StageConfigData[]; onClose: () => void
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={modalOverlay}>
+      <div style={{ ...modalBox, maxWidth: 560, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #fef2f2, #fee2e2)', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>تسجيل غياب</h3>
-          <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>تسجيل غياب</h3>
+          <button onClick={onClose} style={closeBtn}>✕</button>
         </div>
-        <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Students */}
+        <div style={{ padding: 24, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>الطلاب * (يمكن اختيار عدة طلاب)</label>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#4b5563', marginBottom: 8 }}>الطلاب * (يمكن اختيار عدة طلاب)</label>
             <input type="text" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="ابحث بالاسم أو الرقم..."
-              style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
+              style={{ width: '100%', height: 40, padding: '0 12px', border: '2px solid #d1d5db', borderRadius: 12, fontSize: 14, boxSizing: 'border-box' }} />
             {filteredStudents.length > 0 && (
-              <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', marginTop: '4px' }}>
-                {filteredStudents.map((s) => (
-                  <div key={s.id} onClick={() => { setSelectedStudents((p) => [...p, s]); setStudentSearch(''); }}
+              <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, marginTop: 4 }}>
+                {filteredStudents.map(s => (
+                  <div key={s.id} onClick={() => { setSelectedStudents(p => [...p, s]); setStudentSearch(''); }}
                     style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 600 }}>{s.name}</span><span style={{ fontSize: '12px', color: '#6b7280' }}>{s.grade} ({s.className})</span>
+                    <span style={{ fontWeight: 600 }}>{s.name}</span><span style={{ fontSize: 12, color: '#6b7280' }}>{s.grade} ({s.className})</span>
                   </div>
                 ))}
               </div>
             )}
             {selectedStudents.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                {selectedStudents.map((s) => (
-                  <span key={s.id} style={{ padding: '4px 10px', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {s.name}<button onClick={() => setSelectedStudents((p) => p.filter((x) => x.id !== s.id))} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px', padding: '0 2px' }}>✕</button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {selectedStudents.map(s => (
+                  <span key={s.id} style={{ padding: '4px 10px', background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {s.name}<button onClick={() => setSelectedStudents(p => p.filter(x => x.id !== s.id))} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕</button>
                   </span>
                 ))}
               </div>
             )}
           </div>
-          {/* Absence Type */}
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نوع الغياب</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {Object.entries(ABSENCE_TYPES).map(([key, t]) => (
-                <button key={key} onClick={() => setAbsenceType(key)} style={{
-                  flex: 1, padding: '10px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
-                  background: absenceType === key ? t.bg : '#f3f4f6', color: absenceType === key ? t.color : '#374151',
-                  border: absenceType === key ? `2px solid ${t.color}` : '1px solid #d1d5db',
-                }}>{t.label}</button>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#4b5563', marginBottom: 8 }}>نوع الغياب</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[{ key: 'FullDay', label: 'يوم كامل', color: '#dc2626' }, { key: 'Period', label: 'حصة', color: '#ea580c' }].map(t => (
+                <button key={t.key} onClick={() => setAbsenceType(t.key)} style={{ flex: 1, padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', background: absenceType === t.key ? `${t.color}15` : '#f3f4f6', color: absenceType === t.key ? t.color : '#374151', border: absenceType === t.key ? `2px solid ${t.color}` : '1px solid #d1d5db' }}>{t.label}</button>
               ))}
             </div>
           </div>
-          {/* Period (if Period type) */}
           {absenceType === 'Period' && (
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>الحصة</label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {PERIODS.map((p) => (
-                  <button key={p} onClick={() => setPeriod(p)} style={{
-                    padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    background: period === p ? '#ea580c' : '#f3f4f6', color: period === p ? '#fff' : '#374151',
-                    border: period === p ? '2px solid #c2410c' : '1px solid #d1d5db',
-                  }}>{p}</button>
-                ))}
-              </div>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#4b5563', marginBottom: 8 }}>الحصة</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{PERIODS.map(p => (<button key={p} onClick={() => setPeriod(p)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: period === p ? '#ea580c' : '#f3f4f6', color: period === p ? '#fff' : '#374151', border: period === p ? '2px solid #c2410c' : '1px solid #d1d5db' }}>{p}</button>))}</div>
             </div>
           )}
-          {/* Day Name */}
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>اليوم</label>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {DAY_NAMES.map((d) => (
-                <button key={d} onClick={() => setDayName(d)} style={{
-                  padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                  background: dayName === d ? '#2563eb' : '#f3f4f6', color: dayName === d ? '#fff' : '#374151',
-                  border: dayName === d ? '2px solid #1d4ed8' : '1px solid #d1d5db',
-                }}>{d}</button>
-              ))}
-            </div>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#4b5563', marginBottom: 8 }}>اليوم</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{DAY_NAMES.map(d => (<button key={d} onClick={() => setDayName(d)} style={{ padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: dayName === d ? '#2563eb' : '#f3f4f6', color: dayName === d ? '#fff' : '#374151', border: dayName === d ? '2px solid #1d4ed8' : '1px solid #d1d5db' }}>{d}</button>))}</div>
           </div>
-          {/* Notes */}
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>ملاحظات (اختياري)</label>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 700, color: '#4b5563', marginBottom: 8 }}>ملاحظات (اختياري)</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              style={{ width: '100%', padding: '10px 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '10px 12px', border: '2px solid #d1d5db', borderRadius: 12, fontSize: 14, resize: 'vertical', boxSizing: 'border-box' }} />
           </div>
         </div>
-        <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+        <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
-          <button onClick={handleSave} disabled={saving} style={{
-            padding: '8px 24px', background: '#ea580c', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer', opacity: saving ? 0.7 : 1,
-          }}>{saving ? 'جاري الحفظ...' : `حفظ (${selectedStudents.length} طالب)`}</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 24px', background: '#ea580c', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'جاري الحفظ...' : `حفظ (${selectedStudents.length} طالب)`}</button>
         </div>
       </div>
     </div>
   );
 };
+
+// ============================================================
+// Shared styles
+// ============================================================
+const modalOverlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
+const modalBox: React.CSSProperties = { background: '#fff', borderRadius: 20, boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', overflow: 'hidden' };
+const closeBtn: React.CSSProperties = { padding: 8, background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9ca3af' };
+const selectStyle: React.CSSProperties = { padding: '6px 12px', borderRadius: 8, border: '2px solid #d1d5db', fontSize: 13, background: '#fff' };
+
+function btnStyle(color: string, outline = false): React.CSSProperties {
+  return outline
+    ? { padding: '6px 14px', background: '#fff', color, borderRadius: 8, border: `2px solid ${color}30`, fontWeight: 700, cursor: 'pointer', fontSize: 12 }
+    : { padding: '6px 14px', background: color, color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 12, boxShadow: `0 2px 8px ${color}40` };
+}
+
+function miniBtn(color: string): React.CSSProperties {
+  return { padding: '4px 6px', background: `${color}10`, color, borderRadius: 6, border: `1px solid ${color}30`, cursor: 'pointer', fontSize: 12, lineHeight: 1 };
+}
+
+function cardBtn(color: string, bg: string): React.CSSProperties {
+  return { flex: 1, padding: '5px 6px', background: bg, color, borderRadius: 8, fontSize: 10, fontWeight: 700, border: `1px solid ${color}30`, cursor: 'pointer', textAlign: 'center' as const };
+}
 
 export default AbsencePage;

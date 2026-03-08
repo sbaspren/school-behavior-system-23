@@ -13,13 +13,16 @@ export interface ParentExcuseRow {
   absenceDate: string;
   submittedAt: string;
   submittedTime: string;
-  status: string;          // معلق / مقبول / مرفوض
+  status: string;
   schoolNotes: string;
   accessCode: string;
+  source?: string;
+  miladiDate?: string;
+  day?: string;
+  parentName?: string;
 }
 
 export const parentExcuseApi = {
-  // Admin endpoints
   getAll: (stage?: string, status?: string) => {
     const params = new URLSearchParams();
     if (stage) params.set('stage', stage);
@@ -33,13 +36,15 @@ export const parentExcuseApi = {
     return api.get(`/parentexcuse/pending-count?${params.toString()}`);
   },
 
-  updateStatus: (id: number, status: string, notes?: string) =>
-    api.put(`/parentexcuse/${id}/status`, { status, notes }),
+  updateStatus: (id: number, status: string, notes?: string, sendMessage?: boolean) =>
+    api.put(`/parentexcuse/${id}/status`, { status, notes, sendMessage }),
 
   delete: (id: number) =>
     api.delete(`/parentexcuse/${id}`),
 
-  // Public endpoints (parent form)
+  sendCustomMessage: (id: number, message: string) =>
+    api.post(`/parentexcuse/${id}/send-message`, { message }),
+
   verifyToken: (token: string) =>
     api.get(`/parentexcuse/public/verify?token=${token}`),
 
@@ -47,5 +52,8 @@ export const parentExcuseApi = {
     api.post('/parentexcuse/public/submit', data),
 
   generateCode: (studentNumber: string, stage: string) =>
+    api.post('/parentexcuse/generate-code', { studentNumber, stage }),
+
+  generateLink: (studentNumber: string, stage: string) =>
     api.post('/parentexcuse/generate-code', { studentNumber, stage }),
 };
