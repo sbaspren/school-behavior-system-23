@@ -29,4 +29,11 @@ export const studentsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  previewExcel: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/students/preview-excel', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

@@ -157,13 +157,30 @@ public class SettingsController : ControllerBase
         var removedStages = oldEnabledIds.Except(newEnabledIds).ToList();
 
         // إذا هناك مراحل مُلغاة ولم يُؤكّد الحذف — أرجع قائمة للتأكيد
+        // ★ مطابق لـ saveSchoolStructure في Server_Settings.gs سطر 234-253
         if (removedStages.Count > 0 && !request.ConfirmedDeletion)
         {
+            // بناء قائمة البيانات التي ستُحذف (مطابق لـ sheetsToDelete في الأصلي)
+            var dataToDelete = new List<string>();
+            foreach (var removedStage in removedStages)
+            {
+                var arabicName = removedStage.ToArabic();
+                dataToDelete.Add($"طلاب_{arabicName}");
+                dataToDelete.Add($"مخالفات_{arabicName}");
+                dataToDelete.Add($"غياب_{arabicName}");
+                dataToDelete.Add($"غياب_تراكمي_{arabicName}");
+                dataToDelete.Add($"تأخر_{arabicName}");
+                dataToDelete.Add($"استئذان_{arabicName}");
+                dataToDelete.Add($"ملاحظات_{arabicName}");
+                dataToDelete.Add($"سلوك_{arabicName}");
+            }
+
             return Ok(ApiResponse<object>.Ok(new
             {
                 needsConfirmation = true,
                 removedStages = removedStages.Select(s => s.ToArabic()).ToList(),
-                message = "سيتم حذف بيانات المراحل المُلغاة. هل أنت متأكد؟"
+                dataToDelete,
+                message = "سيتم حذف جميع بيانات المراحل المُلغاة نهائياً. هل أنت متأكد؟"
             }));
         }
 

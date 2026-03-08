@@ -139,6 +139,73 @@ public class StudentsController : ControllerBase
         return Ok(ApiResponse.Ok($"تم الاستيراد: {added} جديد، {updated} محدّث"));
     }
 
+    // معاينة ملف Excel قبل الاستيراد — مطابق لـ processUploadedFile في Server_Settings.gs سطر 728-792
+    [HttpPost("preview-excel")]
+    public async Task<ActionResult<ApiResponse<object>>> PreviewExcel([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return Ok(ApiResponse.Fail("الملف مطلوب"));
+
+        using var stream = file.OpenReadStream();
+        using var workbook = new XLWorkbook(stream);
+        var ws = FindBestWorksheet(workbook);
+
+        var (colNumber, colName, colGrade, colClass, colMobile, headerRowNum) = DetectStudentColumns(ws);
+        if (colName == 0)
+            return Ok(ApiResponse.Fail("لم يتم العثور على عمود 'اسم الطالب' أو 'الاسم'"));
+
+        // استخراج الرؤوس
+        var headers = new List<string>();
+        for (int c = 1; c <= Math.Min(30, ws.ColumnsUsed().Count()); c++)
+        {
+            headers.Add(ws.Row(headerRowNum).Cell(c).GetString().Trim());
+        }
+
+        // معاينة أول 10 صفوف
+        var preview = new List<List<string>>();
+        for (int r = headerRowNum; r <= Math.Min(headerRowNum + 10, ws.RowsUsed().Count()); r++)
+        {
+            var row = new List<string>();
+            for (int c = 1; c <= headers.Count; c++)
+            {
+                row.Add(ws.Row(r).Cell(c).GetString().Trim());
+            }
+            preview.Add(row);
+        }
+
+        // عدد الصفوف الفعلية
+        int totalRows = 0;
+        for (int r = headerRowNum + 1; r <= ws.RowsUsed().Count(); r++)
+        {
+            var name = colName > 0 ? ws.Row(r).Cell(colName).GetString().Trim() : "";
+            if (!string.IsNullOrWhiteSpace(name)) totalRows++;
+        }
+
+        // كشف التكرار مع الموجود
+        var existingNumbers = await _db.Students
+            .Where(s => !string.IsNullOrEmpty(s.StudentNumber))
+            .Select(s => s.StudentNumber)
+            .ToListAsync();
+        var existingSet = new HashSet<string>(existingNumbers, StringComparer.Ordinal);
+
+        // مطابق لـ processUploadedFile → columns object
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            headers,
+            preview,
+            totalRows,
+            columns = new
+            {
+                studentId = colNumber > 0 ? colNumber - 1 : -1,
+                name = colName > 0 ? colName - 1 : -1,
+                grade = colGrade > 0 ? colGrade - 1 : -1,
+                classVal = colClass > 0 ? colClass - 1 : -1,
+                mobile = colMobile > 0 ? colMobile - 1 : -1,
+            },
+            existingCount = existingSet.Count
+        }));
+    }
+
     // استيراد من ملف Excel
     [HttpPost("import-excel")]
     public async Task<ActionResult<ApiResponse>> ImportFromExcel(

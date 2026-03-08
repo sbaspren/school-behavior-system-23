@@ -408,7 +408,7 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
     return buildInitialStages();
   });
   const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ removedStages: string[]; message: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ removedStages: string[]; dataToDelete?: string[]; message: string } | null>(null);
 
   // When secondary system changes, update secondary grade list
   useEffect(() => {
@@ -473,6 +473,7 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
       if (resData?.needsConfirmation) {
         setDeleteConfirm({
           removedStages: resData.removedStages || [],
+          dataToDelete: resData.dataToDelete || [],
           message: resData.message || 'سيتم حذف بيانات المراحل المُلغاة. هل أنت متأكد؟',
         });
         setSaving(false);
@@ -637,6 +638,15 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
                   <span style={{ fontSize: '12px', color: '#b91c1c' }}>(طلاب + سجلات مخالفات + غياب + ...)</span>
                 </div>
               ))}
+              {/* ★ قائمة البيانات التفصيلية — مطابق لـ sheetsToDelete في الأصلي */}
+              {deleteConfirm.dataToDelete && deleteConfirm.dataToDelete.length > 0 && (
+                <div style={{ marginTop: '12px', maxHeight: '120px', overflowY: 'auto', background: '#fff', borderRadius: '8px', padding: '8px', border: '1px solid #fecaca' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 700, color: '#b91c1c', margin: '0 0 4px' }}>السجلات التي ستُحذف:</p>
+                  {deleteConfirm.dataToDelete.map((item, i) => (
+                    <div key={i} style={{ fontSize: '12px', color: '#6b7280', padding: '2px 0' }}>• {item}</div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: 700, marginBottom: '20px' }}>

@@ -346,14 +346,19 @@ public class TeachersController : ControllerBase
     }
 
     // كشف الأعمدة تلقائياً مع البحث عن صف الرؤوس
+    // ★ يدعم بنية نور المعروفة (headerRow=14, nameCol=21, idCol=23, mobileCol=5)
+    // مطابق لـ handleTeachersFileUpload في JS_Settings.html سطر 1649-1666
     private static (int colCivil, int colName, int colMobile, int headerRow) DetectColumns(IXLWorksheet ws)
     {
-        // البحث عن صف الرؤوس في أول 10 صفوف
-        for (int r = 1; r <= Math.Min(10, ws.RowsUsed().Count()); r++)
+        int maxRow = Math.Min(25, ws.RowsUsed().Count()); // فحص أول 25 صف (نور يبدأ من 14)
+        int maxCol = Math.Min(30, ws.ColumnsUsed().Count());
+
+        // البحث عن صف الرؤوس في أول 25 صفوف
+        for (int r = 1; r <= maxRow; r++)
         {
             var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var row = ws.Row(r);
-            for (int c = 1; c <= Math.Min(30, ws.ColumnsUsed().Count()); c++)
+            for (int c = 1; c <= maxCol; c++)
             {
                 var val = row.Cell(c).GetString().Trim();
                 if (!string.IsNullOrEmpty(val))
@@ -366,6 +371,40 @@ public class TeachersController : ControllerBase
                 int cc = FindCol(colMap, "السجل المدني", "الهوية", "CivilId", "رقم الهوية", "سجل", "هوية");
                 int cm = FindCol(colMap, "الجوال", "Mobile", "جوال", "رقم الجوال", "هاتف");
                 return (cc, cn, cm, r);
+            }
+        }
+
+        // ★ Noor fallback — بنية نور المعروفة: صف العناوين 15 (0-indexed = 14)
+        // الاسم = عمود V (22)، الهوية = عمود X (24)، الجوال = عمود F (6)
+        // مطابق لـ JS_Settings.html سطر 1663: headerRow=14, nameCol=21, idCol=23, mobileCol=5
+        if (ws.RowsUsed().Count() > 15)
+        {
+            // تحقق: هل الصف 15 يحتوي كلمة "الإسم" أو "اسم"?
+            bool looksLikeNoor = false;
+            for (int c = 1; c <= maxCol; c++)
+            {
+                var v = ws.Row(15).Cell(c).GetString().Trim();
+                if (v.Contains("الإسم") || v.Contains("الاسم") || v.Contains("اسم"))
+                {
+                    looksLikeNoor = true;
+                    break;
+                }
+            }
+            if (looksLikeNoor)
+            {
+                // +1 لأن ClosedXML 1-indexed بينما JS 0-indexed
+                return (24, 22, 6, 15);
+            }
+
+            // fallback أخير: نور بدون تحقق (إذا الملف كبير بما فيه الكفاية)
+            if (ws.RowsUsed().Count() > 20)
+            {
+                var nameTest = ws.Row(16).Cell(22).GetString().Trim();
+                var idTest = ws.Row(16).Cell(24).GetString().Trim();
+                if (!string.IsNullOrEmpty(nameTest) && !string.IsNullOrEmpty(idTest) && idTest.Length >= 5)
+                {
+                    return (24, 22, 6, 15);
+                }
             }
         }
 

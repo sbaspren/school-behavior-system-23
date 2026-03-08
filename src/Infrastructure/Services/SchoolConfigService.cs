@@ -105,8 +105,55 @@ public class SchoolConfigService : ISchoolConfigService
             settings.UpdatedAt = DateTime.UtcNow;
         }
 
-        // حذف المراحل القديمة واستبدالها
+        // ★ مقارنة المراحل القديمة والجديدة — مطابق لـ saveSchoolStructure في Server_Settings.gs سطر 220-287
         var existingStages = await _db.StageConfigs.Include(s => s.Grades).ToListAsync();
+        var oldEnabledIds = existingStages.Where(s => s.IsEnabled).Select(s => s.Stage).ToHashSet();
+        var newEnabledIds = newStages.Where(s => s.IsEnabled).Select(s => s.Stage).ToHashSet();
+        var removedStages = oldEnabledIds.Except(newEnabledIds).ToList();
+
+        // ★ حذف بيانات المراحل المُلغاة (طلاب + سجلات per-stage)
+        // مطابق لسلوك الأصلي: حذف شيت الطلاب + سجلات المخالفات/الغياب/التأخر/الاستئذان/الملاحظات/السلوك
+        if (removedStages.Count > 0)
+        {
+            foreach (var removedStage in removedStages)
+            {
+                // حذف الطلاب
+                var students = await _db.Students.Where(s => s.Stage == removedStage).ToListAsync();
+                _db.Students.RemoveRange(students);
+
+                // حذف المخالفات
+                var violations = await _db.Violations.Where(v => v.Stage == removedStage).ToListAsync();
+                _db.Violations.RemoveRange(violations);
+
+                // حذف الغياب اليومي
+                var absences = await _db.DailyAbsences.Where(a => a.Stage == removedStage).ToListAsync();
+                _db.DailyAbsences.RemoveRange(absences);
+
+                // حذف الغياب التراكمي
+                var cumAbsences = await _db.CumulativeAbsences.Where(a => a.Stage == removedStage).ToListAsync();
+                _db.CumulativeAbsences.RemoveRange(cumAbsences);
+
+                // حذف التأخر
+                var tardiness = await _db.TardinessRecords.Where(t => t.Stage == removedStage).ToListAsync();
+                _db.TardinessRecords.RemoveRange(tardiness);
+
+                // حذف الاستئذان
+                var permissions = await _db.PermissionRecords.Where(p => p.Stage == removedStage).ToListAsync();
+                _db.PermissionRecords.RemoveRange(permissions);
+
+                // حذف الملاحظات التربوية
+                var notes = await _db.EducationalNotes.Where(n => n.Stage == removedStage).ToListAsync();
+                _db.EducationalNotes.RemoveRange(notes);
+
+                // حذف السلوك الإيجابي
+                var behaviors = await _db.PositiveBehaviors.Where(b => b.Stage == removedStage).ToListAsync();
+                _db.PositiveBehaviors.RemoveRange(behaviors);
+            }
+
+            await _db.SaveChangesAsync();
+        }
+
+        // حذف المراحل القديمة واستبدالها
         _db.StageConfigs.RemoveRange(existingStages);
         await _db.SaveChangesAsync();
 
