@@ -435,12 +435,229 @@ public class WhatsAppController : ControllerBase
     [HttpGet("user-types")]
     public ActionResult<ApiResponse<List<string>>> GetUserTypes()
     {
-        return Ok(ApiResponse<List<string>>.Ok(new List<string> { "\u0648\u0643\u064a\u0644", "\u0645\u062f\u064a\u0631", "\u0645\u0648\u062c\u0647" })); // وكيل، مدير، موجه
+        return Ok(ApiResponse<List<string>>.Ok(new List<string> { "وكيل", "مدير", "موجه" }));
     }
 
-    // ===== Security Code =====
+    // ===== getPrimaryPhoneForStage — الرقم الرئيسي لمرحلة معينة =====
+    // مطابق لـ getPrimaryPhoneForStage() في Server_WhatsApp.gs سطر 453–476
 
-    [HttpGet("security/status")]
+    [HttpGet("sessions/primary")]
+    public async Task<ActionResult<ApiResponse<object>>> GetPrimaryForStage([FromQuery] string? stage = null)
+    {
+        var schoolSettings = await _db.SchoolSettings.FirstOrDefaultAsync();
+        var whatsAppMode = schoolSettings?.WhatsAppMode.ToString() ?? "PerStage";
+        var effectiveStage = whatsAppMode == "Unified" ? "" : (stage ?? "");
+
+        var primary = await _db.WhatsAppSessions
+            .Where(s => s.IsPrimary &&
+                   (string.IsNullOrEmpty(effectiveStage) || s.Stage == effectiveStage))
+            .FirstOrDefaultAsync();
+
+        if (primary == null)
+            return Ok(ApiResponse<object>.Ok(new { found = false }));
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            found        = true,
+            id           = primary.Id,
+            phoneNumber  = primary.PhoneNumber,
+            stage        = primary.Stage,
+            userType     = primary.UserType,
+            connectionStatus = primary.ConnectionStatus,
+            isPrimary    = true,
+        }));
+    }
+
+    // ===== updatePhoneStatus — تحديث حالة جلسة =====
+    // مطابق لـ updatePhoneStatus() في Server_WhatsApp.gs سطر 503–519
+
+    [HttpPut("sessions/{id}/status")]
+    public async Task<ActionResult<ApiResponse>> UpdateSessionStatus(int id, [FromBody] UpdateStatusRequest request)
+    {
+        var session = await _db.WhatsAppSessions.FindAsync(id);
+        if (session == null)
+            return NotFound(ApiResponse.Fail("الجلسة غير موجودة"));
+
+        session.ConnectionStatus = request.Status ?? "غير متصل";
+        session.LastUsed = DateTime.Now;
+        await _db.SaveChangesAsync();
+        return Ok(ApiResponse.Ok("تم تحديث الحالة"));
+    }
+
+    // ===== rebuildSessionsSheet — إعادة بناء الجلسات =====
+    // مطابق لـ rebuildSessionsSheet() في Server_WhatsApp.gs سطر 136–151
+
+    [HttpPost("sessions/rebuild")]
+    public async Task<ActionResult<ApiResponse>> RebuildSessions()
+    {
+        var all = await _db.WhatsAppSessions.ToListAsync();
+        _db.WhatsAppSessions.RemoveRange(all);
+        await _db.SaveChangesAsync();
+        return Ok(ApiResponse.Ok("تم إعادة بناء الجلسات بنجاح"));
+    }
+
+    // ===== checkPhoneStatusInServer — فحص رقم معين في السيرفر =====
+    // مطابق لـ checkPhoneStatusInServer() في Server_WhatsApp.gs سطر 671–685
+
+    [HttpGet("sessions/check-server")]
+    public async Task<ActionResult<ApiResponse<object>>> CheckPhoneOnServer([FromQuery] string phone)
+    {
+        if (string.IsNullOrEmpty(phone))
+            return BadRequest(ApiResponse<object>.Fail("رقم الجوال مطلوب"));
+
+        var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var serverUrl = settings?.ServerUrl ?? "";
+        if (string.IsNullOrEmpty(serverUrl))
+            return Ok(ApiResponse<object>.Ok(new { connected = false, error = "رابط السيرفر غير مُعيّن" }));
+
+        var serverPhones = await _waServer.GetConnectedSessionsAsync(serverUrl);
+        var cleanPhone   = CleanPhoneNumber(phone);
+        var found        = serverPhones.FirstOrDefault(p =>
+            CleanPhoneNumber(p) == cleanPhone || p.Contains(cleanPhone));
+
+        return Ok(ApiResponse<object>.Ok(new { connected = found != null, phoneNumber = found }));
+    }
+
+    // ===== getConnectedSessionsByStage — الأرقام المتصلة حسب المرحلة =====
+    // مطابق لـ getConnectedSessionsByStage() في Server_WhatsApp.gs سطر 705–745
+
+    [HttpGet("connected-sessions/by-stage")]
+    public async Task<ActionResult<ApiResponse<object>>> GetConnectedByStage([FromQuery] string? stage = null)
+    {
+        var settings      = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var serverUrl     = settings?.ServerUrl ?? "";
+        var schoolSettings = await _db.SchoolSettings.FirstOrDefaultAsync();
+        var whatsAppMode  = schoolSettings?.WhatsAppMode.ToString() ?? "PerStage";
+        var effectiveStage = whatsAppMode == "Unified" ? "" : (stage ?? "");
+
+        // جلب الأرقام المتصلة من السيرفر
+        var serverPhones = new List<string>();
+        if (!string.IsNullOrEmpty(serverUrl))
+            serverPhones = await _waServer.GetConnectedSessionsAsync(serverUrl);
+
+        // جلب الجلسات المحفوظة للمرحلة
+        var query = _db.WhatsAppSessions.AsQueryable();
+        if (!string.IsNullOrEmpty(effectiveStage))
+            query = query.Where(s => s.Stage == effectiveStage);
+        var saved = await query.ToListAsync();
+
+        var allSessions = saved.Select(s => new
+        {
+            s.Id, s.PhoneNumber, s.Stage, s.UserType,
+            s.IsPrimary, s.MessageCount,
+            isConnected      = serverPhones.Contains(s.PhoneNumber),
+            connectionStatus = serverPhones.Contains(s.PhoneNumber) ? "متصل" : "غير متصل",
+        }).ToList();
+
+        var connectedSessions = allSessions.Where(s => s.isConnected).ToList<object>();
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            allSessions      = allSessions.Cast<object>().ToList(),
+            connectedSessions,
+            stage            = effectiveStage,
+            whatsAppMode,
+        }));
+    }
+
+    // ===== inspectQREndpoint — تشخيص صفحة QR من السيرفر =====
+    // مطابق لـ inspectQREndpoint() في Server_WhatsApp.gs سطر 601–663
+
+    [HttpGet("qr/inspect")]
+    public async Task<ActionResult<ApiResponse<object>>> InspectQR()
+    {
+        var settings  = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var serverUrl = settings?.ServerUrl ?? "";
+        if (string.IsNullOrEmpty(serverUrl))
+            return Ok(ApiResponse<object>.Ok(new { success = false, error = "رابط السيرفر غير مُعيّن" }));
+
+        var result = await _waServer.InspectQRAsync(serverUrl);
+        return Ok(ApiResponse<object>.Ok(result));
+    }
+
+    // ===== syncAndSavePhone — مزامنة رقم من السيرفر وحفظه =====
+    // مطابق لـ syncAndSavePhone() في Server_WhatsApp.gs سطر 894–910
+    // + منطق saveWhatsAppPhone() في Server_WhatsApp.gs سطر 370–420
+
+    [HttpPost("sessions/sync")]
+    public async Task<ActionResult<ApiResponse<object>>> SyncAndSave([FromBody] SyncSaveRequest request)
+    {
+        if (string.IsNullOrEmpty(request.PhoneNumber))
+            return BadRequest(ApiResponse<object>.Fail("رقم الواتساب مطلوب"));
+
+        var settings       = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var serverUrl      = settings?.ServerUrl ?? "";
+        var schoolSettings = await _db.SchoolSettings.FirstOrDefaultAsync();
+        var whatsAppMode   = schoolSettings?.WhatsAppMode.ToString() ?? "PerStage";
+        var effectiveStage = whatsAppMode == "Unified" ? "" : (request.Stage ?? "");
+        var cleanPhone     = CleanPhoneNumber(request.PhoneNumber);
+
+        // التحقق من أن الرقم متصل في السيرفر
+        if (!string.IsNullOrEmpty(serverUrl))
+        {
+            var serverPhones = await _waServer.GetConnectedSessionsAsync(serverUrl);
+            var foundOnServer = serverPhones.Any(p => CleanPhoneNumber(p) == cleanPhone);
+            if (!foundOnServer)
+                return Ok(ApiResponse<object>.Ok(new
+                {
+                    success = false,
+                    error   = "الرقم غير متصل في السيرفر"
+                }));
+        }
+
+        // إزالة علامة رئيسي من جميع أرقام المرحلة
+        var stageSessions = await _db.WhatsAppSessions
+            .Where(s => s.Stage == effectiveStage)
+            .ToListAsync();
+        foreach (var s in stageSessions) s.IsPrimary = false;
+
+        // هل الرقم موجود مسبقاً؟
+        var existing = stageSessions.FirstOrDefault(s =>
+            s.PhoneNumber == cleanPhone &&
+            s.UserType    == (request.UserType ?? "وكيل"));
+
+        if (existing != null)
+        {
+            existing.ConnectionStatus = "متصل";
+            existing.IsPrimary        = true;
+            existing.LastUsed         = DateTime.Now;
+        }
+        else
+        {
+            _db.WhatsAppSessions.Add(new WhatsAppSession
+            {
+                PhoneNumber      = cleanPhone,
+                Stage            = effectiveStage,
+                UserType         = request.UserType ?? "وكيل",
+                ConnectionStatus = "متصل",
+                LinkedAt         = DateTime.Now,
+                LastUsed         = DateTime.Now,
+                IsPrimary        = true,
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            success     = true,
+            message     = "تم حفظ الرقم كرقم رئيسي",
+            phoneNumber = cleanPhone,
+            isPrimary   = true,
+        }));
+    }
+
+    // ===== مساعد: تنظيف رقم الجوال =====
+    // مطابق لـ cleanPhoneNumber() في Server_WhatsApp.gs سطر 1063–1073
+    private static string CleanPhoneNumber(string phone)
+    {
+        var clean = new string(phone.Where(char.IsDigit).ToArray());
+        if (clean.StartsWith("05"))               clean = "966" + clean[1..];
+        else if (clean.StartsWith("5") && clean.Length == 9) clean = "966" + clean;
+        else if (!clean.StartsWith("966") && clean.Length == 9) clean = "966" + clean;
+        return clean;
+    }
+
+    private static string? MaskPhone(string? phone)
     public async Task<ActionResult<ApiResponse<object>>> GetSecurityStatus()
     {
         var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
@@ -636,4 +853,18 @@ public class SecurityChangeRequest
     public string? RecoveryPhone1 { get; set; }
     public string? RecoveryPhone2 { get; set; }
     public bool BypassOldCode { get; set; } // Used after recovery verification
+}
+
+// ===== DTOs الجديدة — مطابق للدوال الجديدة =====
+
+public class UpdateStatusRequest
+{
+    public string? Status { get; set; }  // "متصل" | "غير متصل"
+}
+
+public class SyncSaveRequest
+{
+    public string? PhoneNumber { get; set; }
+    public string? Stage       { get; set; }
+    public string? UserType    { get; set; }
 }

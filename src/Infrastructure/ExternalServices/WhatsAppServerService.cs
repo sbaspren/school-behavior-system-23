@@ -170,6 +170,72 @@ public class WhatsAppServerService : IWhatsAppServerService
         }
     }
 
+    // مطابق لـ inspectQREndpoint في Server_WhatsApp.gs سطر 601–663
+    public async Task<object> InspectQRAsync(string serverUrl)
+    {
+        if (string.IsNullOrEmpty(serverUrl))
+            return new { success = false, error = "رابط السيرفر غير مُعيّن" };
+
+        try
+        {
+            var response = await _http.GetAsync($"{serverUrl.TrimEnd('/')}/qr");
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "unknown";
+            var statusCode = (int)response.StatusCode;
+            var content = await response.Content.ReadAsStringAsync();
+
+            var hasBase64Image = content.Contains("data:image");
+            var hasImgTag    = content.Contains("<img");
+            var hasCanvasTag = content.Contains("<canvas");
+            var hasSVG       = content.Contains("<svg");
+            var hasQRText    = content.Contains("qr") || content.Contains("QR");
+
+            var preview = content.Length > 2000 ? content[..2000] : content;
+
+            var imgSrcMatch = Regex.Match(content, @"<img[^>]+src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
+            var imgSrc = imgSrcMatch.Success ? imgSrcMatch.Groups[1].Value : null;
+
+            // فحص endpoints إضافية — مطابق للأصل
+            var extraEndpoints = new List<object>();
+            foreach (var ep in new[] { "/qr/image", "/api/qr", "/qr?format=base64", "/qr?format=json", "/pair" })
+            {
+                try
+                {
+                    var r = await _http.GetAsync($"{serverUrl.TrimEnd('/')}{ep}");
+                    var c = await r.Content.ReadAsStringAsync();
+                    extraEndpoints.Add(new
+                    {
+                        endpoint = ep,
+                        status   = (int)r.StatusCode,
+                        contentType = r.Content.Headers.ContentType?.MediaType ?? "unknown",
+                        contentLength = c.Length,
+                        preview  = c.Length > 200 ? c[..200] : c,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    extraEndpoints.Add(new { endpoint = ep, status = "error", error = ex.Message });
+                }
+            }
+
+            return new
+            {
+                success = true,
+                serverUrl,
+                statusCode,
+                contentType,
+                contentLength = content.Length,
+                analysis = new { hasBase64Image, hasImgTag, hasCanvasTag, hasSVG, hasQRText },
+                imgSrc,
+                preview,
+                extraEndpoints,
+            };
+        }
+        catch (Exception e)
+        {
+            return new { success = false, error = e.Message };
+        }
+    }
+
     // مطابق لـ cleanPhoneNumber في Server_WhatsApp.gs سطر 1063-1073
     private static string CleanPhone(string phone)
     {

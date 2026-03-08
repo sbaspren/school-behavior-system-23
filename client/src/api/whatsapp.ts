@@ -20,6 +20,12 @@ export interface AddSessionData {
   userType?: string;
 }
 
+export interface SyncSaveData {
+  phoneNumber: string;
+  stage?: string;
+  userType?: string;
+}
+
 export interface WhatsAppSettingsData {
   serverUrl?: string;
   serviceStatus?: string;
@@ -34,14 +40,26 @@ export const whatsappApi = {
   saveSettings: (data: WhatsAppSettingsData) => api.post('/whatsapp/settings', data),
 
   // Server status
-  getStatus: () => api.get('/whatsapp/status'),
+  getStatus: (stage?: string) => {
+    const sp = new URLSearchParams();
+    if (stage) sp.set('stage', stage);
+    return api.get(`/whatsapp/status?${sp.toString()}`);
+  },
   ping: () => api.post('/whatsapp/ping'),
 
   // QR Code
   getQR: () => api.get('/whatsapp/qr'),
+  // inspectQREndpoint — تشخيص صفحة QR من السيرفر (مطابق GAS سطر 601)
+  inspectQR: () => api.get('/whatsapp/qr/inspect'),
 
   // Connected sessions from server
   getConnectedSessions: () => api.get('/whatsapp/connected-sessions'),
+  // getConnectedSessionsByStage — مطابق GAS سطر 705
+  getConnectedByStage: (stage?: string) => {
+    const sp = new URLSearchParams();
+    if (stage) sp.set('stage', stage);
+    return api.get(`/whatsapp/connected-sessions/by-stage?${sp.toString()}`);
+  },
 
   // Send
   send: (data: { senderPhone?: string; recipientPhone: string; message: string; stage?: string }) =>
@@ -49,10 +67,32 @@ export const whatsappApi = {
   sendWithLog: (data: SendWithLogData) => api.post('/whatsapp/send-with-log', data),
 
   // Session management
-  getSessions: () => api.get('/whatsapp/sessions'),
+  getSessions: (stage?: string, userType?: string) => {
+    const sp = new URLSearchParams();
+    if (stage) sp.set('stage', stage);
+    if (userType) sp.set('userType', userType);
+    return api.get(`/whatsapp/sessions?${sp.toString()}`);
+  },
   addSession: (data: AddSessionData) => api.post('/whatsapp/sessions', data),
   setPrimary: (id: number) => api.put(`/whatsapp/sessions/${id}/primary`),
+  // updatePhoneStatus — تحديث حالة جلسة (مطابق GAS سطر 503)
+  updateStatus: (id: number, status: string) =>
+    api.put(`/whatsapp/sessions/${id}/status`, { status }),
   deleteSession: (id: number) => api.delete(`/whatsapp/sessions/${id}`),
+  // rebuildSessionsSheet — إعادة بناء الجلسات (مطابق GAS سطر 136)
+  rebuildSessions: () => api.post('/whatsapp/sessions/rebuild'),
+  // checkPhoneStatusInServer — فحص رقم في السيرفر (مطابق GAS سطر 671)
+  checkPhoneOnServer: (phone: string) =>
+    api.get(`/whatsapp/sessions/check-server?phone=${encodeURIComponent(phone)}`),
+  // getPrimaryPhoneForStage — الرقم الرئيسي للمرحلة (مطابق GAS سطر 453)
+  getPrimaryForStage: (stage?: string) => {
+    const sp = new URLSearchParams();
+    if (stage) sp.set('stage', stage);
+    return api.get(`/whatsapp/sessions/primary?${sp.toString()}`);
+  },
+  // syncAndSavePhone — مزامنة وحفظ رقم من السيرفر (مطابق GAS سطر 894)
+  syncAndSave: (data: SyncSaveData) => api.post('/whatsapp/sessions/sync', data),
+
   getStats: (stage?: string) => {
     const sp = new URLSearchParams();
     if (stage) sp.set('stage', stage);

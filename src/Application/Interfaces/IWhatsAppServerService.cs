@@ -7,6 +7,7 @@ public interface IWhatsAppServerService
     Task<List<string>> GetConnectedSessionsAsync(string serverUrl);
     Task<bool> SendMessageAsync(string serverUrl, string senderPhone, string recipientPhone, string message);
     Task<bool> PingAsync(string serverUrl);
+    Task<object> InspectQRAsync(string serverUrl);
 }
 
 public class WhatsAppServerStatus
