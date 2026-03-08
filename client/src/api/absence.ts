@@ -70,6 +70,7 @@ export const absenceApi = {
     api.put(`/absence/${id}/excuse-type`, { excuseType }),
 
   updateSent: (id: number, isSent: boolean) => api.put(`/absence/${id}/sent`, { isSent }),
+  updateSentBatch: (ids: number[]) => api.put('/absence/sent-batch', { ids }),
 
   sendWhatsApp: (id: number, data?: { senderPhone?: string; message?: string; sentBy?: string }) =>
     api.post(`/absence/${id}/send-whatsapp`, data || {}),
@@ -114,6 +115,9 @@ export const absenceApi = {
 
   updateCumulative: (studentId: number, data: { excusedDays?: number; unexcusedDays?: number; lateDays?: number }) =>
     api.put(`/absence/cumulative/${studentId}`, data),
+
+  importNoorCumulative: (rows: { name: string; late: number; unexcused: number; excused: number }[]) =>
+    api.post('/absence/cumulative/import-noor', { rows }),
 
   getStatistics: (filters?: { stage?: string; grade?: string; className?: string; dateFrom?: string; dateTo?: string }) => {
     const params = new URLSearchParams();

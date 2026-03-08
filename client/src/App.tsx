@@ -22,6 +22,7 @@ import GuardDisplayPage from './pages/GuardDisplayPage';
 import WakeelFormPage from './pages/WakeelFormPage';
 import CounselorFormPage from './pages/CounselorFormPage';
 import AdminTardinessPage from './pages/AdminTardinessPage';
+import AttendancePage from './pages/AttendancePage';
 import AuditLogPage from './pages/AuditLogPage';
 import ReportsPage from './pages/ReportsPage';
 import GeneralFormsPage from './pages/GeneralFormsPage';
@@ -112,6 +113,7 @@ function AppContent() {
             <Route path="/violations" element={<ViolationsPage />} />
             <Route path="/positive" element={<PositiveBehaviorPage />} />
             <Route path="/tardiness" element={<TardinessPage />} />
+            <Route path="/attendance" element={<AttendancePage />} />
             <Route path="/absence" element={<AbsencePage />} />
             <Route path="/permissions" element={<PermissionsPage />} />
             <Route path="/notes" element={<EducationalNotesPage />} />

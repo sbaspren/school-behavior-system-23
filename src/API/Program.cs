@@ -30,6 +30,8 @@ builder.Services.AddHttpClient<ISmsService, SmsService>();
 
 // Background Services — مطابق لـ setupDailyBakeTrigger() في Server_TeacherInput.gs سطر 185-203
 builder.Services.AddHostedService<TeacherDataBakeService>();
+// ★ ترحيل الغياب اليومي — مطابق لـ archiveDailyAbsence() + createArchiveTrigger() في Server_Absence_Daily.gs
+builder.Services.AddHostedService<AbsenceArchiveService>();
 
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SchoolBehaviorSystemDefaultKey2024!@#$%";

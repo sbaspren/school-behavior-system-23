@@ -58,6 +58,12 @@ export const permissionsApi = {
   updateSent: (id: number, isSent: boolean) => api.put(`/permissions/${id}/sent`, { isSent }),
   updateSentBatch: (ids: number[]) => api.put('/permissions/sent-batch', { ids }),
 
+  getPending: (stage?: string) => {
+    const params = new URLSearchParams();
+    if (stage) params.set('stage', stage);
+    return api.get(`/permissions/pending?${params.toString()}`);
+  },
+
   sendWhatsApp: (id: number, data?: { senderPhone?: string; message?: string; sentBy?: string }) =>
     api.post(`/permissions/${id}/send-whatsapp`, data || {}),
 

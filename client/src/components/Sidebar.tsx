@@ -25,6 +25,7 @@ const NAV_ITEMS: NavGroup[] = [
   { section: 'شؤون الطلاب', items: [
     { path: '/violations', label: 'المخالفات السلوكية', icon: 'gavel' },
     { path: '/positive', label: 'السلوك الإيجابي', icon: 'star' },
+    { path: '/attendance', label: 'التأخر والاستئذان', icon: 'schedule', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
     { path: '/tardiness', label: 'التأخر', icon: 'timer_off', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
     { path: '/absence', label: 'الغياب', icon: 'event_busy', roles: ['Admin', 'Deputy', 'Counselor'] },
     { path: '/permissions', label: 'الاستئذان', icon: 'exit_to_app', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
