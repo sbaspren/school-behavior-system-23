@@ -1,0 +1,11 @@
+D:\SchoolBehaviorSystem\src\Domain\bin\Debug\net8.0\SchoolBehaviorSystem.Domain.deps.json
+D:\SchoolBehaviorSystem\src\Domain\bin\Debug\net8.0\SchoolBehaviorSystem.Domain.dll
+D:\SchoolBehaviorSystem\src\Domain\bin\Debug\net8.0\SchoolBehaviorSystem.Domain.pdb
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\SchoolBehaviorSystem.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\SchoolBehaviorSystem.Domain.AssemblyInfoInputs.cache
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\SchoolBehaviorSystem.Domain.AssemblyInfo.cs
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\SchoolBehaviorSystem.Domain.csproj.CoreCompileInputs.cache
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\SchoolBehaviorSystem.Domain.dll
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\refint\SchoolBehaviorSystem.Domain.dll
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\SchoolBehaviorSystem.Domain.pdb
+D:\SchoolBehaviorSystem\src\Domain\obj\Debug\net8.0\ref\SchoolBehaviorSystem.Domain.dll

@@ -1,0 +1,417 @@
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { staffInputApi, StaffVerifyData, StaffStudent, StudentsMap, TodayEntries } from '../api/staffInput';
+import { teacherInputApi } from '../api/teacherInput';
+import { getTodayHijri } from '../utils/hijriDate';
+
+// ═══════════════════════════════════════════
+// Static Data (same as WakeelForm/TeacherForm)
+// ═══════════════════════════════════════════
+
+interface NoteItem { id: number; text: string; }
+interface PositiveNoteItem { id: number; text: string; cat: string; }
+interface PositiveItem { id: number; text: string; degree: number; group: string; }
+
+const NOTES: NoteItem[] = [
+  {id:1,text:'عدم حل الواجب'},{id:2,text:'عدم الحفظ'},
+  {id:3,text:'عدم المشاركة والتفاعل'},{id:4,text:'عدم إحضار الكتاب الدراسي'},
+  {id:5,text:'عدم إحضار الدفتر'},{id:6,text:'كثرة السرحان داخل الفصل'},
+  {id:7,text:'عدم إحضار أدوات الرسم'},{id:8,text:'عدم إحضار الأدوات الهندسية'},
+  {id:9,text:'عدم إحضار الملابس الرياضية'},{id:10,text:'النوم داخل الفصل'},
+  {id:11,text:'عدم تدوين الملاحظات مع المعلم'},{id:12,text:'إهمال تسليم البحوث والمشاريع'},
+  {id:13,text:'عدم المذاكرة للاختبارات القصيرة'},{id:14,text:'الانشغال بمادة أخرى أثناء الحصة'},
+  {id:15,text:'عدم تصحيح الأخطاء في الدفتر'},{id:16,text:'عدم إحضار ملف الإنجاز'},
+];
+
+const POSITIVE_NOTES: Record<string, PositiveNoteItem[]> = {
+  'ابتدائي': [
+    {id:101,text:'بطل الفصل اليوم، شكراً لدعمكم',cat:'عام'},
+    {id:102,text:'ملتزم جداً بنظام الفصل اليوم',cat:'انضباط'},
+    {id:103,text:'خلوق ومؤدب مع زملائه، بارك الله في تربيتكم',cat:'أخلاق'},
+    {id:104,text:'مبدعنا مستمر في تميزه لليوم، استمر يا بطل!',cat:'إنجاز'},
+  ],
+  'متوسط': [
+    {id:201,text:'حضور مميز وتفاعل ذكي اليوم',cat:'عام'},
+    {id:202,text:'كل التقدير لانضباطه وحرصه العالي في الحصة',cat:'انضباط'},
+    {id:203,text:'خُلقه الراقي اليوم نموذج يفتخر به',cat:'أخلاق'},
+    {id:204,text:'مستمر في وتيرة الإنجاز العالية، فخورون به',cat:'إنجاز'},
+  ],
+  'ثانوي': [
+    {id:301,text:'تقديري لتميزه وانضباطه خلال حصة اليوم',cat:'عام'},
+    {id:302,text:'جديته وانضباطه الذاتي يجعله قدوة لزملائه',cat:'انضباط'},
+    {id:303,text:'نموذج للشاب الخلوق والمحترم، فخور بوجوده',cat:'أخلاق'},
+    {id:304,text:'ثبات مستواه وتطوره المستمر، إلى القمة دائماً',cat:'إنجاز'},
+  ],
+};
+
+const POSITIVE: PositiveItem[] = [
+  {id:1,text:'انضباط الطالب وعدم غيابه بدون عذر خلال الفصل الدراسي',degree:6,group:'6 درجات'},
+  {id:2,text:'المشاركة في الخدمة المجتمعية خارج المدرسة',degree:6,group:'6 درجات / مشاركة'},
+  {id:3,text:'تقديم فعالية حوارية',degree:6,group:'6 درجات / مشاركة'},
+  {id:4,text:'المشاركة في حملة توعوية',degree:6,group:'6 درجات / مشاركة'},
+  {id:5,text:'عرض تجارب شخصية ناجحة',degree:6,group:'6 درجات / مشاركة'},
+  {id:6,text:'الالتحاق ببرنامج أو دورة',degree:6,group:'6 درجات / مشاركة'},
+  {id:7,text:'مهارات الاتصال (العمل الجماعي، التعلم بالأقران)',degree:4,group:'4 درجات / مشاركة'},
+  {id:8,text:'مهارات القيادة والمسؤولية (التخطيط، التحفيز)',degree:4,group:'4 درجات / مشاركة'},
+  {id:9,text:'المهارات الرقمية (إعداد العروض، تصميم المحتوى الإلكتروني)',degree:4,group:'4 درجات / مشاركة'},
+  {id:10,text:'مهارة إدارة الوقت',degree:4,group:'4 درجات / مشاركة'},
+  {id:11,text:'كتابة رسالة شكر (للوطن، للقيادة الرشيدة، للأسرة، للمعلم)',degree:2,group:'درجتان / مشاركة'},
+  {id:12,text:'المشاركة في الإذاعة',degree:2,group:'درجتان / مشاركة'},
+  {id:13,text:'تقديم مقترح لصالح المجتمع المدرسي',degree:2,group:'درجتان / مشاركة'},
+  {id:14,text:'التعاون مع الزملاء والمعلمين وإدارة المدرسة',degree:2,group:'درجتان / مشاركة'},
+];
+
+const POS_DEG_COLORS: Record<number, string> = {6:'#dcfce7',4:'#fef9c3',2:'#dbeafe'};
+const POS_DEG_TEXT: Record<number, string> = {6:'#166534',4:'#854d0e',2:'#1e40af'};
+const REASONS = ['ظرف صحي', 'ظرف أسري', 'موعد حكومي', 'طلب ولي الأمر'];
+const GUARDIANS = ['الأب', 'الأخ', 'الأم', 'أخرى'];
+
+type TabId = 'permission' | 'notes' | 'positive';
+const TABS: { id: TabId; label: string; color: string }[] = [
+  { id: 'permission', label: 'استئذان', color: '#3b82f6' },
+  { id: 'notes', label: 'ملاحظات', color: '#06b6d4' },
+  { id: 'positive', label: 'سلوك متمايز', color: '#22c55e' },
+];
+
+export default function CounselorFormPage() {
+  const [params] = useSearchParams();
+  const token = params.get('token') || '';
+
+  const [pageData, setPageData] = useState<StaffVerifyData | null>(null);
+  const [studentsMap, setStudentsMap] = useState<StudentsMap>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [tab, setTab] = useState<TabId>('permission');
+  const [selectedStage, setSelectedStage] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedStudents, setSelectedStudents] = useState<StaffStudent[]>([]);
+  const [search, setSearch] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const [noteSubType, setNoteSubType] = useState('سلبية');
+  const [selectedNote, setSelectedNote] = useState<{ id: number; text: string } | null>(null);
+  const [noteDetails, setNoteDetails] = useState('');
+  const [selectedPositive, setSelectedPositive] = useState<PositiveItem | null>(null);
+  const [positiveDetails, setPositiveDetails] = useState('');
+  const [reason, setReason] = useState(REASONS[0]);
+  const [guardian, setGuardian] = useState(GUARDIANS[0]);
+
+  const [showLog, setShowLog] = useState(false);
+  const [logData, setLogData] = useState<TodayEntries | null>(null);
+
+  const loadData = useCallback(async () => {
+    if (!token) { setError('لا يوجد رمز'); setLoading(false); return; }
+    try {
+      const [vRes, sRes] = await Promise.all([
+        staffInputApi.verify(token), staffInputApi.getStudents(token),
+      ]);
+      if (vRes.data?.data) setPageData(vRes.data.data);
+      if (sRes.data?.data) setStudentsMap(sRes.data.data);
+    } catch { setError('رابط غير صالح أو حدث خطأ'); }
+    finally { setLoading(false); }
+  }, [token]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const stages = useMemo(() => Object.keys(studentsMap), [studentsMap]);
+  const grades = useMemo(() =>
+    selectedStage && studentsMap[selectedStage] ? Object.keys(studentsMap[selectedStage]) : [], [studentsMap, selectedStage]);
+  const classes = useMemo(() =>
+    selectedStage && selectedGrade && studentsMap[selectedStage]?.[selectedGrade]
+      ? Object.keys(studentsMap[selectedStage][selectedGrade]) : [], [studentsMap, selectedStage, selectedGrade]);
+
+  const needsClass = tab === 'notes' || tab === 'positive';
+
+  const currentStudents = useMemo(() => {
+    if (!selectedStage || !selectedGrade) return [];
+    if (tab === 'permission') {
+      const gd = studentsMap[selectedStage]?.[selectedGrade];
+      return gd ? Object.values(gd).flat() : [];
+    }
+    if (!selectedClass) return [];
+    return studentsMap[selectedStage]?.[selectedGrade]?.[selectedClass] || [];
+  }, [studentsMap, selectedStage, selectedGrade, selectedClass, tab]);
+
+  const filteredStudents = useMemo(() => {
+    if (!search) return currentStudents;
+    const q = search.toLowerCase();
+    return currentStudents.filter(s => s.name.toLowerCase().includes(q));
+  }, [currentStudents, search]);
+
+  const isSelected = useCallback((id: number) => selectedStudents.some(s => s.id === id), [selectedStudents]);
+  const toggleStudent = useCallback((s: StaffStudent) => {
+    setSelectedStudents(prev => prev.some(x => x.id === s.id) ? prev.filter(x => x.id !== s.id) : [...prev, s]);
+  }, []);
+  const toggleAll = useCallback(() => {
+    setSelectedStudents(prev => prev.length === filteredStudents.length ? [] : [...filteredStudents]);
+  }, [filteredStudents]);
+
+  const handleTabChange = useCallback((newTab: TabId) => {
+    setTab(newTab); setSelectedStudents([]); setSelectedNote(null); setSelectedPositive(null); setSearch(''); setMsg(null);
+  }, []);
+
+  const currentNotes = useMemo(() => {
+    if (noteSubType === 'سلبية') return NOTES;
+    return POSITIVE_NOTES[selectedStage] || POSITIVE_NOTES['متوسط'] || [];
+  }, [noteSubType, selectedStage]);
+
+  const handleSubmit = useCallback(async () => {
+    if (selectedStudents.length === 0) return;
+    setSubmitting(true); setMsg(null);
+    try {
+      if (tab === 'permission') {
+        await staffInputApi.savePermission({ token, studentIds: selectedStudents.map(s => s.id), reason, guardian });
+      } else {
+        const dayNames = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+        const dayName = dayNames[new Date().getDay()];
+        let inputType = '', itemId = '', itemText = '', itemDegree = '', noteClassification = '', details = '';
+
+        if (tab === 'positive' && selectedPositive) {
+          inputType = 'positive'; itemId = String(selectedPositive.id); itemText = selectedPositive.text;
+          itemDegree = String(selectedPositive.degree); details = positiveDetails;
+        } else if (tab === 'notes' && selectedNote) {
+          inputType = noteSubType === 'سلبية' ? 'note' : 'positive-note';
+          itemId = String(selectedNote.id); itemText = selectedNote.text;
+          noteClassification = noteSubType; details = noteDetails;
+        } else { setMsg({ text: 'يرجى اختيار عنصر', type: 'error' }); setSubmitting(false); return; }
+
+        await teacherInputApi.submit({
+          token, teacherName: pageData?.staff.name || '', className: selectedClass || selectedGrade,
+          inputType, itemId, itemText, itemDegree, noteClassification, details,
+          hijriDate: getTodayHijri(), dayName, noAbsence: false, notifyDeputy: false,
+          students: selectedStudents.map(s => ({ id: String(s.id), name: s.name, phone: s.phone })),
+        });
+      }
+      setMsg({ text: `تم التسجيل بنجاح (${selectedStudents.length} طالب)`, type: 'success' });
+      setSelectedStudents([]);
+    } catch { setMsg({ text: 'حدث خطأ أثناء الحفظ', type: 'error' }); }
+    finally { setSubmitting(false); }
+  }, [tab, token, selectedStudents, selectedPositive, positiveDetails, selectedNote, noteSubType,
+    noteDetails, reason, guardian, selectedClass, selectedGrade, pageData]);
+
+  const loadLog = useCallback(async () => {
+    try { const res = await staffInputApi.getTodayEntries(token); if (res.data?.data) setLogData(res.data.data); } catch {}
+    setShowLog(true);
+  }, [token]);
+
+  useEffect(() => { if (msg) { const t = setTimeout(() => setMsg(null), 4000); return () => clearTimeout(t); } }, [msg]);
+
+  if (loading) return <div style={S.loadingPage}>جاري التحميل...</div>;
+  if (error) return (
+    <div style={S.errorPage}>
+      <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+      <div style={{ fontSize: '18px', fontWeight: 700, color: '#dc2626' }}>{error}</div>
+    </div>
+  );
+
+  const tabColor = TABS.find(t => t.id === tab)?.color || '#3b82f6';
+
+  return (
+    <div style={S.page}>
+      <div style={S.header}>
+        <div style={{ fontSize: '18px', fontWeight: 800 }}>نموذج المرشد</div>
+        <div style={{ fontSize: '13px', opacity: 0.85 }}>{pageData?.staff.name} — {pageData?.sn}</div>
+        <button onClick={() => loadData()} style={S.refreshBtn}>تحديث</button>
+      </div>
+
+      <div style={S.tabBar}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => handleTabChange(t.id)} style={{
+            ...S.tabBtn, borderBottom: tab === t.id ? `3px solid ${t.color}` : '3px solid transparent',
+            color: tab === t.id ? t.color : '#6b7280', fontWeight: tab === t.id ? 700 : 400,
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {msg && (
+        <div style={{ margin: '8px 16px', padding: '10px 16px', borderRadius: '8px',
+          background: msg.type === 'success' ? '#dcfce7' : '#fee2e2',
+          color: msg.type === 'success' ? '#166534' : '#991b1b', fontSize: '14px', fontWeight: 600, textAlign: 'center',
+        }}>{msg.text}</div>
+      )}
+
+      <div style={S.content}>
+        <div style={S.card}>
+          <div style={{ display: 'grid', gridTemplateColumns: needsClass ? '1fr 1fr 1fr' : '1fr 1fr', gap: '8px' }}>
+            <select value={selectedStage} onChange={e => { setSelectedStage(e.target.value); setSelectedGrade(''); setSelectedClass(''); setSelectedStudents([]); }} style={S.select}>
+              <option value="">المرحلة</option>
+              {stages.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select value={selectedGrade} onChange={e => { setSelectedGrade(e.target.value); setSelectedClass(''); setSelectedStudents([]); }} style={S.select}>
+              <option value="">الصف</option>
+              {grades.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            {needsClass && (
+              <select value={selectedClass} onChange={e => { setSelectedClass(e.target.value); setSelectedStudents([]); }} style={S.select}>
+                <option value="">الفصل</option>
+                {classes.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {tab === 'permission' && (
+          <div style={S.card}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <select value={reason} onChange={e => setReason(e.target.value)} style={S.select}>
+                {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <select value={guardian} onChange={e => setGuardian(e.target.value)} style={S.select}>
+                {GUARDIANS.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {tab === 'notes' && (
+          <div style={S.card}>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+              {['سلبية', 'إشادة'].map(t => (
+                <button key={t} onClick={() => { setNoteSubType(t); setSelectedNote(null); }} style={{
+                  ...S.pillBtn, background: noteSubType === t ? '#06b6d4' : '#f3f4f6',
+                  color: noteSubType === t ? '#fff' : '#374151',
+                }}>{t === 'سلبية' ? 'ملاحظات سلبية' : 'إشادة'}</button>
+              ))}
+            </div>
+            <div style={S.scrollList}>
+              {currentNotes.map((n: any) => {
+                const active = selectedNote?.id === n.id;
+                return (
+                  <div key={n.id} onClick={() => setSelectedNote(active ? null : n)} style={{
+                    ...S.listItem, background: active ? '#ecfeff' : '#fff',
+                    borderRight: `4px solid ${active ? '#06b6d4' : '#e5e7eb'}`,
+                  }}>
+                    <span style={{ flex: 1, fontSize: '13px' }}>{n.text}</span>
+                    {'cat' in n && <span style={{ fontSize: '11px', color: '#9ca3af' }}>{(n as PositiveNoteItem).cat}</span>}
+                  </div>
+                );
+              })}
+            </div>
+            {selectedNote && <textarea placeholder="تفاصيل إضافية..." value={noteDetails}
+              onChange={e => setNoteDetails(e.target.value)} style={S.textarea} rows={2} />}
+          </div>
+        )}
+
+        {tab === 'positive' && (
+          <div style={S.card}>
+            <div style={S.scrollList}>
+              {POSITIVE.map(p => {
+                const active = selectedPositive?.id === p.id;
+                return (
+                  <div key={p.id} onClick={() => setSelectedPositive(active ? null : p)} style={{
+                    ...S.listItem, background: active ? '#f0fdf4' : '#fff',
+                    borderRight: `4px solid ${active ? '#22c55e' : POS_DEG_COLORS[p.degree] || '#e5e7eb'}`,
+                  }}>
+                    <span style={{ flex: 1, fontSize: '13px' }}>{p.text}</span>
+                    <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 700,
+                      background: POS_DEG_COLORS[p.degree], color: POS_DEG_TEXT[p.degree],
+                    }}>{p.degree} درجات</span>
+                  </div>
+                );
+              })}
+            </div>
+            {selectedPositive && <textarea placeholder="تفاصيل إضافية..." value={positiveDetails}
+              onChange={e => setPositiveDetails(e.target.value)} style={S.textarea} rows={2} />}
+          </div>
+        )}
+
+        {(selectedStage && selectedGrade && (!needsClass || selectedClass)) && (
+          <div style={S.card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700 }}>
+                اختر الطلاب
+                {selectedStudents.length > 0 && <span style={{ marginRight: '8px', padding: '2px 10px', borderRadius: '12px', background: tabColor, color: '#fff', fontSize: '12px' }}>{selectedStudents.length}</span>}
+              </span>
+              <button onClick={toggleAll} style={{ ...S.pillBtn, background: '#f3f4f6', fontSize: '12px' }}>
+                {selectedStudents.length === filteredStudents.length ? 'إلغاء الكل' : 'تحديد الكل'}
+              </button>
+            </div>
+            <input placeholder="بحث عن طالب..." value={search} onChange={e => setSearch(e.target.value)} style={S.searchInput} />
+            {selectedStudents.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '8px 0' }}>
+                {selectedStudents.map(s => (
+                  <span key={s.id} onClick={() => toggleStudent(s)} style={{
+                    padding: '4px 10px', borderRadius: '16px', fontSize: '12px', cursor: 'pointer',
+                    background: tabColor + '20', color: tabColor, fontWeight: 600,
+                  }}>{s.name} ✕</span>
+                ))}
+              </div>
+            )}
+            <div style={S.scrollList}>
+              {filteredStudents.map(s => (
+                <div key={s.id} onClick={() => toggleStudent(s)} style={{ ...S.studentItem, background: isSelected(s.id) ? tabColor + '10' : '#fff' }}>
+                  <div style={{ width: '20px', height: '20px', borderRadius: '4px',
+                    border: `2px solid ${isSelected(s.id) ? tabColor : '#d1d5db'}`,
+                    background: isSelected(s.id) ? tabColor : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700,
+                  }}>{isSelected(s.id) && '✓'}</div>
+                  <span style={{ fontSize: '14px' }}>{s.name}</span>
+                </div>
+              ))}
+              {filteredStudents.length === 0 && <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>
+                {currentStudents.length === 0 ? 'اختر المرحلة والصف' : 'لا توجد نتائج'}
+              </div>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={S.bottomBar}>
+        <button onClick={handleSubmit} disabled={submitting || selectedStudents.length === 0} style={{
+          ...S.submitBtn, background: selectedStudents.length > 0 ? tabColor : '#d1d5db', opacity: submitting ? 0.6 : 1,
+        }}>{submitting ? 'جاري الإرسال...' : `إرسال (${selectedStudents.length})`}</button>
+        <button onClick={loadLog} style={S.logBtn}>سجل اليوم</button>
+      </div>
+
+      {showLog && (
+        <div style={S.overlay} onClick={() => setShowLog(false)}>
+          <div style={S.modal} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}>
+              <span style={{ fontWeight: 700, fontSize: '16px' }}>سجل اليوم</span>
+              <button onClick={() => setShowLog(false)} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ padding: '16px 20px', maxHeight: '60vh', overflowY: 'auto' }}>
+              {logData?.permissions && logData.permissions.length > 0 && (
+                <>{logData.permissions.map((e, i) => (
+                  <div key={i} style={{ padding: '8px', borderBottom: '1px solid #f3f4f6', fontSize: '13px' }}>
+                    {e.studentName} — {e.className} — {e.reason} — {e.time}
+                  </div>
+                ))}</>
+              )}
+              {(!logData?.permissions?.length && !logData?.tardiness?.length) && (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#9ca3af' }}>لا توجد سجلات اليوم</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const S: Record<string, React.CSSProperties> = {
+  page: { direction: 'rtl', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", minHeight: '100vh', background: '#f0f2f5', paddingBottom: '70px' },
+  loadingPage: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", fontSize: '16px', color: '#6b7280' },
+  errorPage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
+  header: { position: 'sticky', top: 0, zIndex: 100, background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: '#fff', padding: '16px 20px', textAlign: 'center' },
+  refreshBtn: { position: 'absolute', left: '16px', top: '16px', border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' },
+  tabBar: { display: 'flex', background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: '76px', zIndex: 99 },
+  tabBtn: { flex: 1, padding: '12px 8px', border: 'none', background: 'none', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
+  content: { maxWidth: '600px', margin: '0 auto', padding: '12px 16px' },
+  card: { background: '#fff', borderRadius: '16px', padding: '16px', marginBottom: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' },
+  select: { width: '100%', padding: '10px 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
+  searchInput: { width: '100%', padding: '10px 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", marginBottom: '8px', boxSizing: 'border-box' },
+  pillBtn: { padding: '6px 14px', borderRadius: '100px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
+  scrollList: { maxHeight: '280px', overflowY: 'auto' },
+  listItem: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' },
+  studentItem: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' },
+  textarea: { width: '100%', padding: '10px 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", marginTop: '8px', boxSizing: 'border-box', resize: 'vertical' },
+  bottomBar: { position: 'fixed', bottom: 0, left: 0, right: 0, display: 'flex', gap: '8px', padding: '12px 16px', background: '#fff', borderTop: '1px solid #e5e7eb', zIndex: 100, maxWidth: '600px', margin: '0 auto', boxShadow: '0 -4px 12px rgba(0,0,0,.06)' },
+  submitBtn: { flex: 1, padding: '14px', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '16px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
+  logBtn: { padding: '14px 20px', border: '2px solid #d1d5db', borderRadius: '12px', background: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' },
+  modal: { background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '600px', maxHeight: '70vh' },
+};

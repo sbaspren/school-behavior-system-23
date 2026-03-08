@@ -1,0 +1,738 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { permissionsApi, PermissionData } from '../api/permissions';
+import { studentsApi } from '../api/students';
+import { settingsApi, StageConfigData } from '../api/settings';
+import { showSuccess, showError } from '../components/shared/Toast';
+import { SETTINGS_STAGES } from '../utils/constants';
+
+const REASONS = ['مرض', 'مراجعة طبية', 'ظروف عائلية', 'مراجعة حكومية', 'أخرى'];
+
+interface PermissionRow {
+  id: number; studentId: number; studentNumber: string; studentName: string;
+  grade: string; className: string; stage: string; mobile: string;
+  exitTime: string; reason: string; receiver: string; supervisor: string;
+  hijriDate: string; recordedBy: string; recordedAt: string;
+  confirmationTime: string; isSent: boolean;
+}
+
+interface StudentOption { id: number; studentNumber: string; name: string; stage: string; grade: string; className: string; }
+
+type TabType = 'today' | 'approved' | 'reports';
+
+const PermissionsPage: React.FC = () => {
+  const [records, setRecords] = useState<PermissionRow[]>([]);
+  const [stages, setStages] = useState<StageConfigData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stageFilter, setStageFilter] = useState('__all__');
+  const [activeTab, setActiveTab] = useState<TabType>('today');
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const enabledStages = useMemo(() =>
+    stages.filter((s) => s.isEnabled && s.grades.some((g) => g.isEnabled && g.classCount > 0)), [stages]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [rRes, sRes] = await Promise.all([permissionsApi.getAll(), settingsApi.getStructure()]);
+      if (rRes.data?.data) setRecords(rRes.data.data);
+      if (sRes.data?.data?.stages) setStages(Array.isArray(sRes.data.data.stages) ? sRes.data.data.stages : []);
+    } catch { /* empty */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const filteredByStage = useMemo(() => {
+    if (stageFilter === '__all__') return records;
+    const stageId = SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter;
+    return records.filter((r) => r.stage === stageId);
+  }, [records, stageFilter]);
+
+  const todayDate = new Date().toISOString().split('T')[0];
+  const todayRecords = useMemo(() =>
+    filteredByStage.filter((r) => r.recordedAt?.startsWith(todayDate)), [filteredByStage, todayDate]);
+
+  if (loading) {
+    return (<div style={{ textAlign: 'center', padding: '60px' }}><div className="spinner" /><p style={{ color: '#666', marginTop: '16px' }}>جاري التحميل...</p></div>);
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', border: '1px solid #ddd6fe' }}>
+            <span style={{ fontSize: '24px' }}>🚪</span>
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>الاستئذان</h2>
+            <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>تسجيل ومتابعة حالات الاستئذان</p>
+          </div>
+        </div>
+        <button onClick={() => setModalOpen(true)} style={{
+          padding: '10px 20px', background: '#7c3aed', color: '#fff',
+          borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
+          boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
+        }}>➕ تسجيل استئذان</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <StatCard label="إجمالي الاستئذان" value={filteredByStage.length} color="#7c3aed" />
+        <StatCard label="استئذان اليوم" value={todayRecords.length} color="#0891b2" />
+        <StatCard label="تم التأكيد" value={filteredByStage.filter((r) => r.confirmationTime).length} color="#15803d" />
+        <StatCard label="تم الإرسال" value={filteredByStage.filter((r) => r.isSent).length} color="#2563eb" />
+        <StatCard label="بانتظار التأكيد" value={filteredByStage.filter((r) => !r.confirmationTime).length} color="#ea580c" />
+      </div>
+
+      {/* Stage Filter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '14px', fontWeight: 700, color: '#6b7280' }}>المرحلة:</span>
+        <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '4px' }}>
+          <FilterBtn label="الكل" count={records.length} active={stageFilter === '__all__'} onClick={() => setStageFilter('__all__')} color="#7c3aed" />
+          {enabledStages.map((stage) => {
+            const info = SETTINGS_STAGES.find((s) => s.id === stage.stage);
+            const count = records.filter((r) => r.stage === stage.stage).length;
+            return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} color="#7c3aed" />;
+          })}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '10px', padding: '4px', marginBottom: '16px' }}>
+        {([
+          { id: 'today' as TabType, label: 'اليوم', icon: '📅' },
+          { id: 'approved' as TabType, label: 'السجل التراكمي', icon: '📋' },
+          { id: 'reports' as TabType, label: 'التقارير', icon: '📊' },
+        ]).map((tab) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            flex: 1, padding: '10px 16px', borderRadius: '8px',
+            background: activeTab === tab.id ? '#fff' : 'transparent',
+            color: activeTab === tab.id ? '#7c3aed' : '#6b7280',
+            fontWeight: 700, fontSize: '14px', border: 'none', cursor: 'pointer',
+            boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+          }}>{tab.icon} {tab.label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} />}
+      {activeTab === 'approved' && <ApprovedTab records={filteredByStage} onRefresh={loadData} />}
+      {activeTab === 'reports' && <ReportsTab records={filteredByStage} />}
+
+      {modalOpen && <AddPermissionModal stages={enabledStages} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); loadData(); }} />}
+    </div>
+  );
+};
+
+// ============================================================
+// Today Tab
+// ============================================================
+const TodayTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void; stageFilter: string }> = ({ records, onRefresh, stageFilter }) => {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [search, setSearch] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<PermissionRow | null>(null);
+  const [sendingId, setSendingId] = useState<number | null>(null);
+  const [msgEditorRow, setMsgEditorRow] = useState<PermissionRow | null>(null);
+
+  const filtered = useMemo(() => {
+    if (!search) return records;
+    const q = search.toLowerCase();
+    return records.filter((r) => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q));
+  }, [records, search]);
+
+  const toggleSelect = (id: number) => setSelected((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleSelectAll = () => { if (selected.size === filtered.length) setSelected(new Set()); else setSelected(new Set(filtered.map((r) => r.id))); };
+
+  const handleDelete = async () => { if (!confirmDelete) return; try { await permissionsApi.delete(confirmDelete.id); showSuccess('تم الحذف'); setConfirmDelete(null); onRefresh(); } catch { showError('خطأ'); } };
+
+  const handleSendWhatsApp = (r: PermissionRow) => {
+    setMsgEditorRow(r);
+  };
+
+  const handleConfirmSend = async (r: PermissionRow, message: string) => {
+    setSendingId(r.id);
+    setMsgEditorRow(null);
+    try { const res = await permissionsApi.sendWhatsApp(r.id, { message }); if (res.data?.data?.success) { showSuccess('تم الإرسال'); onRefresh(); } else showError(res.data?.message || 'فشل'); }
+    catch { showError('خطأ'); } finally { setSendingId(null); }
+  };
+
+  const handleSendBulk = async () => {
+    if (selected.size === 0) return;
+    try { const res = await permissionsApi.sendWhatsAppBulk(Array.from(selected)); if (res.data?.data) { showSuccess(`تم إرسال ${res.data.data.sentCount} من ${res.data.data.total}`); setSelected(new Set()); onRefresh(); } }
+    catch { showError('خطأ'); }
+  };
+
+  const handleDeleteBulk = async () => {
+    if (selected.size === 0) return;
+    try { const res = await permissionsApi.deleteBulk(Array.from(selected)); if (res.data?.data) { showSuccess(`تم حذف ${res.data.data.deletedCount}`); setSelected(new Set()); onRefresh(); } }
+    catch { showError('خطأ'); }
+  };
+
+  const handleConfirmExit = async (r: PermissionRow) => {
+    try { const res = await permissionsApi.confirmExit(r.id); if (res.data?.success) { showSuccess('تم تأكيد الخروج'); onRefresh(); } } catch { showError('خطأ'); }
+  };
+
+  const handleExport = async () => {
+    try {
+      const stage = stageFilter !== '__all__' ? (SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter) : undefined;
+      const res = await permissionsApi.exportCsv(stage);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.download = 'permissions.csv'; a.click(); window.URL.revokeObjectURL(url);
+    } catch { showError('خطأ في التصدير'); }
+  };
+
+  const handlePrint = () => {
+    const pw = window.open('', '_blank');
+    if (!pw) return;
+    const rows = filtered.map((r, i) => `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.studentNumber}</td><td>${r.grade} (${r.className})</td><td>${r.exitTime}</td><td>${r.reason}</td><td>${r.receiver}</td><td>${r.confirmationTime || 'بانتظار'}</td></tr>`).join('');
+    pw.document.write(`<html dir="rtl"><head><title>كشف الاستئذان اليومي</title>
+      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2{text-align:center}@media print{body{padding:15px}}</style></head>
+      <body><h2>كشف الاستئذان اليومي</h2><p style="text-align:center">العدد: ${filtered.length}</p>
+      <table><thead><tr><th>#</th><th>الطالب</th><th>الرقم</th><th>الصف</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التأكيد</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    pw.document.close(); pw.print();
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..."
+          style={{ flex: 1, minWidth: '200px', height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px' }} />
+        <button onClick={handlePrint} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
+        <button onClick={handleExport} style={{ height: '38px', padding: '0 16px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📥 تصدير</button>
+      </div>
+
+      {selected.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#f5f3ff', borderRadius: '10px', marginBottom: '12px', border: '1px solid #ddd6fe' }}>
+          <span style={{ fontWeight: 700, color: '#6d28d9' }}>تم تحديد {selected.size}</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={handleSendBulk} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📱 إرسال واتساب</button>
+          <button onClick={handleDeleteBulk} style={{ padding: '6px 16px', background: '#dc2626', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
+          <button onClick={() => setSelected(new Set())} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>إلغاء</button>
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#9ca3af' }}><p style={{ fontSize: '48px' }}>🚪</p><p style={{ fontSize: '18px', fontWeight: 500 }}>لا توجد حالات استئذان لهذا اليوم</p></div>
+      ) : (
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <table className="data-table">
+              <thead><tr>
+                <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} /></th>
+                <th>الطالب</th><th>الصف</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التأكيد</th><th>الإرسال</th><th style={{ textAlign: 'center' }}>إجراءات</th>
+              </tr></thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id} style={{ background: selected.has(r.id) ? '#f5f3ff' : undefined }}>
+                    <td><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} /></td>
+                    <td><div style={{ fontWeight: 700 }}>{r.studentName}</div><div style={{ fontSize: '12px', color: '#9ca3af' }}>{r.studentNumber}</div></td>
+                    <td style={{ fontSize: '13px' }}>{r.grade} ({r.className})</td>
+                    <td style={{ fontSize: '13px' }}>{r.exitTime || '-'}</td>
+                    <td><span style={{ padding: '4px 10px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700, background: '#f5f3ff', color: '#7c3aed' }}>{r.reason || '-'}</span></td>
+                    <td style={{ fontSize: '13px' }}>{r.receiver || '-'}</td>
+                    <td>
+                      {r.confirmationTime ? (
+                        <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#dcfce7', color: '#15803d', fontWeight: 700 }}>{r.confirmationTime}</span>
+                      ) : (
+                        <button onClick={() => handleConfirmExit(r)} style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#fef3c7', color: '#92400e', fontWeight: 700, border: 'none', cursor: 'pointer' }}>تأكيد</button>
+                      )}
+                    </td>
+                    <td>
+                      {r.isSent ? <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#dcfce7', color: '#15803d', fontWeight: 700 }}>تم</span>
+                        : <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>لم يُرسل</span>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                        <button onClick={() => handleSendWhatsApp(r)} disabled={sendingId === r.id} title="إرسال واتساب" style={{ padding: '4px 6px', background: 'none', border: 'none', cursor: sendingId === r.id ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: sendingId === r.id ? 0.5 : 1 }}>📱</button>
+                        <button onClick={() => setConfirmDelete(r)} title="حذف" style={{ padding: '4px 6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}>🗑️</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && <ConfirmModal title="تأكيد حذف الاستئذان" message={`حذف سجل الاستئذان للطالب ${confirmDelete.studentName}؟`} onConfirm={handleDelete} onCancel={() => setConfirmDelete(null)} />}
+
+      {msgEditorRow && (
+        <PermMsgEditorModal record={msgEditorRow} onSend={(msg) => handleConfirmSend(msgEditorRow, msg)} onClose={() => setMsgEditorRow(null)} />
+      )}
+    </>
+  );
+};
+
+// ============================================================
+// Permission Message Editor Modal
+// ============================================================
+const PermMsgEditorModal: React.FC<{ record: PermissionRow; onSend: (message: string) => void; onClose: () => void }> = ({ record, onSend, onClose }) => {
+  const hijriDate = record.hijriDate || new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
+  const defaultMsg = `ولي أمر الطالب / ${record.studentName}\nالسلام عليكم ورحمة الله وبركاته\nنفيدكم بأن ابنكم قد تم تسجيل استئذان له بتاريخ ${hijriDate}${record.exitTime ? ` الساعة ${record.exitTime}` : ''}${record.reason ? ` بسبب: ${record.reason}` : ''}${record.receiver ? `\nوتم تسليمه إلى: ${record.receiver}` : ''}.\nمع تحيات إدارة المدرسة`;
+  const [message, setMessage] = useState(defaultMsg);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '520px', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #dcfce7, #f0fdf4)', borderBottom: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#15803d' }}>📱 إرسال رسالة واتساب</h3>
+            <span style={{ fontSize: '13px', color: '#4b5563' }}>{record.studentName} - {record.mobile || 'لا يوجد رقم'}</span>
+          </div>
+          <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
+        </div>
+        <div style={{ padding: '20px 24px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نص الرسالة</label>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={8}
+            style={{ width: '100%', padding: '12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', lineHeight: 1.8, resize: 'vertical', boxSizing: 'border-box', direction: 'rtl' }} />
+          <button onClick={() => setMessage(defaultMsg)} style={{ marginTop: '8px', padding: '4px 10px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+        </div>
+        <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+          <button onClick={() => onSend(message)} style={{ padding: '8px 24px', background: '#25d366', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>📱 إرسال</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// Approved Tab
+// ============================================================
+const ApprovedTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void }> = ({ records, onRefresh }) => {
+  const [search, setSearch] = useState('');
+  const [gradeFilter, setGradeFilter] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [reasonFilter, setReasonFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [detailStudent, setDetailStudent] = useState<{ studentId: number; studentName: string } | null>(null);
+
+  const studentGroups = useMemo(() => {
+    let list = records;
+    if (gradeFilter) list = list.filter((r) => r.grade === gradeFilter);
+    if (classFilter) list = list.filter((r) => r.className === classFilter);
+    if (reasonFilter) list = list.filter((r) => r.reason === reasonFilter);
+    if (dateFrom) list = list.filter((r) => r.hijriDate >= dateFrom);
+    if (dateTo) list = list.filter((r) => r.hijriDate <= dateTo);
+    if (search) { const q = search.toLowerCase(); list = list.filter((r) => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q)); }
+    const groups = new Map<number, { student: PermissionRow; records: PermissionRow[] }>();
+    for (const r of list) { if (!groups.has(r.studentId)) groups.set(r.studentId, { student: r, records: [] }); groups.get(r.studentId)!.records.push(r); }
+    return Array.from(groups.values()).sort((a, b) => b.records.length - a.records.length);
+  }, [records, gradeFilter, classFilter, reasonFilter, dateFrom, dateTo, search]);
+
+  const allFilteredRecords = useMemo(() => {
+    let list = records;
+    if (gradeFilter) list = list.filter((r) => r.grade === gradeFilter);
+    if (classFilter) list = list.filter((r) => r.className === classFilter);
+    if (reasonFilter) list = list.filter((r) => r.reason === reasonFilter);
+    if (dateFrom) list = list.filter((r) => r.hijriDate >= dateFrom);
+    if (dateTo) list = list.filter((r) => r.hijriDate <= dateTo);
+    if (search) { const q = search.toLowerCase(); list = list.filter((r) => r.studentName.toLowerCase().includes(q) || r.studentNumber.includes(q)); }
+    return list.sort((a, b) => `${a.grade}${a.className}`.localeCompare(`${b.grade}${b.className}`));
+  }, [records, gradeFilter, classFilter, reasonFilter, dateFrom, dateTo, search]);
+
+  const grades = useMemo(() => Array.from(new Set(records.map((r) => r.grade))).sort(), [records]);
+  const classes = useMemo(() => Array.from(new Set(records.filter((r) => !gradeFilter || r.grade === gradeFilter).map((r) => r.className))).sort(), [records, gradeFilter]);
+  const reasons = useMemo(() => Array.from(new Set(records.map((r) => r.reason).filter(Boolean))).sort(), [records]);
+
+  const handlePrintArchive = () => {
+    const pw = window.open('', '_blank');
+    if (!pw) return;
+    let prevClass = '';
+    const rows = allFilteredRecords.map((r, i) => {
+      const classKey = `${r.grade} (${r.className})`;
+      let separator = '';
+      if (classKey !== prevClass) { prevClass = classKey; separator = `<tr style="background:#f0f0f0;font-weight:700"><td colspan="8">${classKey}</td></tr>`; }
+      return `${separator}<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.exitTime || '-'}</td><td>${r.reason || '-'}</td><td>${r.receiver || '-'}</td><td>${r.hijriDate}</td><td>${r.confirmationTime || 'بانتظار'}</td><td>${r.isSent ? 'نعم' : 'لا'}</td></tr>`;
+    }).join('');
+    const dateRange = dateFrom || dateTo ? `<p style="text-align:center">الفترة: ${dateFrom || '...'} إلى ${dateTo || '...'}</p>` : '';
+    pw.document.write(`<html dir="rtl"><head><title>سجل الاستئذان التراكمي</title>
+      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#e5e7eb}h2{text-align:center}@media print{body{padding:15px}}</style></head>
+      <body><h2>سجل الاستئذان التراكمي</h2>${dateRange}<p style="text-align:center">عدد السجلات: ${allFilteredRecords.length} | عدد الطلاب: ${studentGroups.length}</p>
+      <table><thead><tr><th>#</th><th>الطالب</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التاريخ</th><th>التأكيد</th><th>إرسال</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    pw.document.close(); pw.print();
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث..."
+          style={{ flex: 1, minWidth: '200px', height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px' }} />
+        <select value={gradeFilter} onChange={(e) => { setGradeFilter(e.target.value); setClassFilter(''); }}
+          style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff' }}>
+          <option value="">كل الصفوف</option>{grades.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}
+          style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff' }}>
+          <option value="">كل الفصول</option>{classes.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={reasonFilter} onChange={(e) => setReasonFilter(e.target.value)}
+          style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff' }}>
+          <option value="">كل الأسباب</option>{reasons.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '2px' }}>
+          <button onClick={() => setViewMode('cards')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#7c3aed' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>🎴 بطاقات</button>
+          <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#7c3aed' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>📋 جدول</button>
+        </div>
+        <button onClick={handlePrintArchive} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
+      </div>
+
+      {/* Date range filter */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#6b7280' }}>الفترة:</span>
+        <input type="text" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="من تاريخ (هجري)"
+          style={{ height: '34px', padding: '0 10px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '13px', width: '140px' }} />
+        <input type="text" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="إلى تاريخ (هجري)"
+          style={{ height: '34px', padding: '0 10px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '13px', width: '140px' }} />
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '4px 10px', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>مسح</button>
+        )}
+      </div>
+
+      {studentGroups.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#9ca3af' }}><p style={{ fontSize: '48px' }}>📋</p><p style={{ fontSize: '18px', fontWeight: 500 }}>لا توجد سجلات</p></div>
+      ) : viewMode === 'cards' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+          {studentGroups.map(({ student, records: rList }) => (
+            <div key={student.studentId} onClick={() => setDetailStudent({ studentId: student.studentId, studentName: student.studentName })}
+              style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '16px', cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)')}
+              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = 'none')}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div><div style={{ fontWeight: 700, fontSize: '16px' }}>{student.studentName}</div><div style={{ fontSize: '13px', color: '#6b7280' }}>{student.grade} ({student.className})</div></div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: rList.length >= 5 ? '#dc2626' : '#7c3aed' }}>{rList.length}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '12px', background: '#f5f3ff', color: '#7c3aed' }}>{rList.length} استئذان</span>
+                {rList.filter((r) => !r.confirmationTime).length > 0 && (
+                  <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '12px', background: '#fef3c7', color: '#92400e' }}>بانتظار: {rList.filter((r) => !r.confirmationTime).length}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <table className="data-table">
+            <thead><tr><th>الطالب</th><th>الصف</th><th>العدد</th><th>مؤكد</th><th>بانتظار</th><th style={{ textAlign: 'center' }}>تفاصيل</th></tr></thead>
+            <tbody>
+              {studentGroups.map(({ student, records: rList }) => (
+                <tr key={student.studentId}>
+                  <td style={{ fontWeight: 700 }}>{student.studentName}</td>
+                  <td>{student.grade} ({student.className})</td>
+                  <td style={{ fontWeight: 700, color: '#7c3aed' }}>{rList.length}</td>
+                  <td>{rList.filter((r) => r.confirmationTime).length}</td>
+                  <td>{rList.filter((r) => !r.confirmationTime).length}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button onClick={() => setDetailStudent({ studentId: student.studentId, studentName: student.studentName })}
+                      style={{ padding: '4px 12px', background: '#f5f3ff', color: '#7c3aed', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>عرض</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {detailStudent && (
+        <StudentDetailModal studentName={detailStudent.studentName} records={records.filter((r) => r.studentId === detailStudent.studentId)} onClose={() => setDetailStudent(null)} onRefresh={onRefresh} />
+      )}
+    </>
+  );
+};
+
+// ============================================================
+// Student Detail Modal
+// ============================================================
+const StudentDetailModal: React.FC<{ studentName: string; records: PermissionRow[]; onClose: () => void; onRefresh: () => void }> = ({ studentName, records, onClose, onRefresh }) => {
+  const handleSendAll = async () => {
+    const unsent = records.filter((r) => !r.isSent);
+    if (unsent.length === 0) { showError('جميع السجلات تم إرسالها'); return; }
+    try { const res = await permissionsApi.sendWhatsAppBulk(unsent.map((r) => r.id)); if (res.data?.data) { showSuccess(`تم إرسال ${res.data.data.sentCount}`); onRefresh(); } } catch { showError('خطأ'); }
+  };
+
+  const handlePrint = () => {
+    const pw = window.open('', '_blank'); if (!pw) return;
+    const rows = records.map((r) => `<tr><td>${r.hijriDate}</td><td>${r.exitTime}</td><td>${r.reason}</td><td>${r.receiver}</td><td>${r.confirmationTime || '-'}</td><td>${r.isSent ? 'نعم' : 'لا'}</td></tr>`).join('');
+    pw.document.write(`<html dir="rtl"><head><title>سجل الاستئذان - ${studentName}</title>
+      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2{text-align:center}@media print{body{padding:15px}}</style></head>
+      <body><h2>سجل الاستئذان</h2><p><strong>الطالب:</strong> ${studentName} | <strong>الإجمالي:</strong> ${records.length}</p>
+      <table><thead><tr><th>التاريخ</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التأكيد</th><th>إرسال</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    pw.document.close(); pw.print();
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '750px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #f5f3ff, #ede9fe)', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div><h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{studentName}</h3><span style={{ fontSize: '14px', color: '#6b7280' }}>إجمالي الاستئذان: <strong>{records.length}</strong></span></div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={handleSendAll} style={{ padding: '6px 12px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>📱 إرسال الكل</button>
+            <button onClick={handlePrint} style={{ padding: '6px 12px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>🖨️ طباعة</button>
+            <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
+          </div>
+        </div>
+        <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1 }}>
+          <table className="data-table">
+            <thead><tr><th>التاريخ</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التأكيد</th><th>الإرسال</th></tr></thead>
+            <tbody>
+              {records.map((r) => (
+                <tr key={r.id}>
+                  <td style={{ fontSize: '13px' }}>{r.hijriDate}</td>
+                  <td>{r.exitTime}</td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 700, background: '#f5f3ff', color: '#7c3aed' }}>{r.reason}</span></td>
+                  <td>{r.receiver || '-'}</td>
+                  <td>{r.confirmationTime ? <span style={{ color: '#15803d' }}>✅ {r.confirmationTime}</span> : <span style={{ color: '#9ca3af' }}>—</span>}</td>
+                  <td>{r.isSent ? <span style={{ color: '#15803d' }}>✅</span> : <span style={{ color: '#9ca3af' }}>—</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// Reports Tab
+// ============================================================
+const ReportsTab: React.FC<{ records: PermissionRow[] }> = ({ records }) => {
+  const topStudents = useMemo(() => {
+    const g = new Map<number, { name: string; grade: string; cls: string; count: number }>();
+    for (const r of records) { const x = g.get(r.studentId) || { name: r.studentName, grade: r.grade, cls: r.className, count: 0 }; x.count++; g.set(r.studentId, x); }
+    return Array.from(g.entries()).map(([id, x]) => ({ id, ...x })).sort((a, b) => b.count - a.count).slice(0, 10);
+  }, [records]);
+
+  const byReason = useMemo(() => {
+    const g = new Map<string, number>();
+    for (const r of records) { const key = r.reason || 'غير محدد'; g.set(key, (g.get(key) || 0) + 1); }
+    return Array.from(g.entries()).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+  }, [records]);
+
+  const byClass = useMemo(() => {
+    const g = new Map<string, number>();
+    for (const r of records) { const key = `${r.grade} (${r.className})`; g.set(key, (g.get(key) || 0) + 1); }
+    return Array.from(g.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  }, [records]);
+
+  const maxByClass = Math.max(...byClass.map((c) => c.count), 1);
+  const maxByReason = Math.max(...byReason.map((r) => r.count), 1);
+
+  const handlePrint = () => {
+    const pw = window.open('', '_blank'); if (!pw) return;
+    const studentRows = topStudents.map((s, i) => `<tr><td>${i + 1}</td><td>${s.name}</td><td>${s.grade} (${s.cls})</td><td>${s.count}</td></tr>`).join('');
+    pw.document.write(`<html dir="rtl"><head><title>تقرير الاستئذان</title>
+      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2,h3{text-align:center}@media print{body{padding:15px}}</style></head>
+      <body><h2>تقرير الاستئذان</h2><p style="text-align:center">الإجمالي: ${records.length}</p>
+      <h3>أكثر الطلاب استئذاناً</h3><table><thead><tr><th>#</th><th>الطالب</th><th>الصف</th><th>العدد</th></tr></thead><tbody>${studentRows}</tbody></table></body></html>`);
+    pw.document.close(); pw.print();
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+        <button onClick={handlePrint} style={{ padding: '8px 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة التقرير</button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+        <StatCard label="إجمالي الاستئذان" value={records.length} color="#7c3aed" />
+        <StatCard label="تم التأكيد" value={records.filter((r) => r.confirmationTime).length} color="#15803d" />
+        <StatCard label="تم الإرسال" value={records.filter((r) => r.isSent).length} color="#2563eb" />
+      </div>
+
+      {/* By Reason */}
+      <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '20px', marginBottom: '20px' }}>
+        <h4 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700 }}>التوزيع حسب السبب</h4>
+        {byReason.map((r) => (
+          <div key={r.reason} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <span style={{ width: '100px', fontSize: '13px', fontWeight: 700, color: '#4b5563' }}>{r.reason}</span>
+            <div style={{ flex: 1, height: '24px', background: '#f3f4f6', borderRadius: '6px', overflow: 'hidden' }}>
+              <div style={{ width: `${(r.count / maxByReason) * 100}%`, height: '100%', background: '#7c3aed', borderRadius: '6px' }} />
+            </div>
+            <span style={{ width: '40px', fontSize: '14px', fontWeight: 700 }}>{r.count}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* By Class */}
+      {byClass.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '20px', marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700 }}>الاستئذان حسب الفصل</h4>
+          {byClass.slice(0, 10).map((c) => (
+            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+              <span style={{ width: '120px', fontSize: '13px', fontWeight: 600, color: '#4b5563' }}>{c.name}</span>
+              <div style={{ flex: 1, height: '20px', background: '#f3f4f6', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ width: `${(c.count / maxByClass) * 100}%`, height: '100%', background: '#8b5cf6', borderRadius: '6px' }} />
+              </div>
+              <span style={{ width: '30px', fontSize: '13px', fontWeight: 700 }}>{c.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Top Students */}
+      {topStudents.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}><h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>أكثر الطلاب استئذاناً</h4></div>
+          <table className="data-table">
+            <thead><tr><th>#</th><th>الطالب</th><th>الصف</th><th>العدد</th></tr></thead>
+            <tbody>
+              {topStudents.map((s, i) => (
+                <tr key={s.id}><td style={{ fontWeight: 700, color: '#6b7280' }}>{i + 1}</td><td style={{ fontWeight: 700 }}>{s.name}</td><td>{s.grade} ({s.cls})</td><td style={{ fontWeight: 700, color: '#7c3aed' }}>{s.count}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ============================================================
+// Shared Components
+// ============================================================
+const StatCard: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
+  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+    <span style={{ fontSize: '24px', fontWeight: 800, color }}>{value}</span>
+    <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>{label}</span>
+  </div>
+);
+
+const FilterBtn: React.FC<{ label: string; count: number; active: boolean; onClick: () => void; color: string }> = ({ label, count, active, onClick, color }) => (
+  <button onClick={onClick} style={{ padding: '6px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, background: active ? '#fff' : 'transparent', color: active ? color : '#6b7280', boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', border: 'none', cursor: 'pointer' }}>
+    {label} <span style={{ fontSize: '12px', color: active ? color : '#9ca3af' }}>({count})</span>
+  </button>
+);
+
+const ConfirmModal: React.FC<{ title: string; message: string; onConfirm: () => void; onCancel: () => void }> = ({ title, message, onConfirm, onCancel }) => (
+  <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+    <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '400px', padding: '24px' }}>
+      <h3 style={{ margin: '0 0 12px', fontSize: '18px', fontWeight: 700 }}>{title}</h3>
+      <p style={{ margin: '0 0 24px', color: '#4b5563' }}>{message}</p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+        <button onClick={onCancel} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+        <button onClick={onConfirm} style={{ padding: '8px 24px', background: '#dc2626', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>تأكيد</button>
+      </div>
+    </div>
+  </div>
+);
+
+// ============================================================
+// Add Permission Modal
+// ============================================================
+const AddPermissionModal: React.FC<{ stages: StageConfigData[]; onClose: () => void; onSaved: () => void }> = ({ onClose, onSaved }) => {
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [selectedStudents, setSelectedStudents] = useState<StudentOption[]>([]);
+  const [exitTime, setExitTime] = useState('');
+  const [reason, setReason] = useState('');
+  const [receiver, setReceiver] = useState('');
+  const [supervisor, setSupervisor] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { studentsApi.getAll().then((res) => { if (res.data?.data) setStudents(res.data.data); }); }, []);
+
+  const filteredStudents = useMemo(() => {
+    if (!studentSearch.trim()) return [];
+    const q = studentSearch.trim().toLowerCase();
+    const ids = new Set(selectedStudents.map((s) => s.id));
+    return students.filter((s) => !ids.has(s.id) && (s.name.toLowerCase().includes(q) || s.studentNumber.includes(q))).slice(0, 10);
+  }, [students, studentSearch, selectedStudents]);
+
+  const handleSave = async () => {
+    if (selectedStudents.length === 0) return showError('اختر طالب واحد على الأقل');
+    setSaving(true);
+    try {
+      if (selectedStudents.length === 1) {
+        const data: PermissionData = { studentId: selectedStudents[0].id, exitTime, reason, receiver, supervisor };
+        const res = await permissionsApi.add(data);
+        if (res.data?.success) { showSuccess('تم تسجيل الاستئذان'); onSaved(); } else showError(res.data?.message || 'فشل');
+      } else {
+        const res = await permissionsApi.addBatch(selectedStudents.map((s) => s.id), { exitTime, reason, receiver, supervisor });
+        if (res.data?.data) { showSuccess(res.data.data.message || 'تم'); onSaved(); } else showError(res.data?.message || 'فشل');
+      }
+    } catch { showError('فشل التسجيل'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #f5f3ff, #ede9fe)', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>تسجيل استئذان</h3>
+          <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
+        </div>
+        <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Students */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>الطلاب * (يمكن اختيار عدة طلاب)</label>
+            <input type="text" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="ابحث بالاسم أو الرقم..."
+              style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
+            {filteredStudents.length > 0 && (
+              <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px', marginTop: '4px' }}>
+                {filteredStudents.map((s) => (
+                  <div key={s.id} onClick={() => { setSelectedStudents((p) => [...p, s]); setStudentSearch(''); }}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 600 }}>{s.name}</span><span style={{ fontSize: '12px', color: '#6b7280' }}>{s.grade} ({s.className})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedStudents.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                {selectedStudents.map((s) => (
+                  <span key={s.id} style={{ padding: '4px 10px', background: '#f5f3ff', borderRadius: '100px', border: '1px solid #ddd6fe', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {s.name}<button onClick={() => setSelectedStudents((p) => p.filter((x) => x.id !== s.id))} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px', padding: '0 2px' }}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Exit Time */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>وقت الخروج</label>
+            <input type="time" value={exitTime} onChange={(e) => setExitTime(e.target.value)}
+              style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
+          </div>
+          {/* Reason */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>السبب</label>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {REASONS.map((r) => (
+                <button key={r} onClick={() => setReason(r)} style={{
+                  padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  background: reason === r ? '#7c3aed' : '#f3f4f6', color: reason === r ? '#fff' : '#374151',
+                  border: reason === r ? '2px solid #6d28d9' : '1px solid #d1d5db',
+                }}>{r}</button>
+              ))}
+            </div>
+          </div>
+          {/* Receiver */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>المستلم</label>
+            <input type="text" value={receiver} onChange={(e) => setReceiver(e.target.value)} placeholder="اسم ولي الأمر أو المستلم"
+              style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
+          </div>
+          {/* Supervisor */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>المسؤول</label>
+            <input type="text" value={supervisor} onChange={(e) => setSupervisor(e.target.value)} placeholder="المشرف المسؤول"
+              style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
+          </div>
+        </div>
+        <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+          <button onClick={handleSave} disabled={saving} style={{
+            padding: '8px 24px', background: '#7c3aed', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer', opacity: saving ? 0.7 : 1,
+          }}>{saving ? 'جاري الحفظ...' : `حفظ (${selectedStudents.length} طالب)`}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PermissionsPage;

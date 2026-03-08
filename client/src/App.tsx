@@ -1,0 +1,145 @@
+import { useState, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { ToastProvider } from './components/shared/Toast';
+import Sidebar from './components/Sidebar';
+import LoginPage, { AuthUser } from './pages/LoginPage';
+import SettingsPage from './pages/SettingsPage';
+import ViolationsPage from './pages/ViolationsPage';
+import PositiveBehaviorPage from './pages/PositiveBehaviorPage';
+import TardinessPage from './pages/TardinessPage';
+import AbsencePage from './pages/AbsencePage';
+import PermissionsPage from './pages/PermissionsPage';
+import EducationalNotesPage from './pages/EducationalNotesPage';
+import DashboardPage from './pages/DashboardPage';
+import WhatsAppPage from './pages/WhatsAppPage';
+import CommunicationPage from './pages/CommunicationPage';
+import NoorPage from './pages/NoorPage';
+import AcademicPage from './pages/AcademicPage';
+import ParentExcusePage from './pages/ParentExcusePage';
+import TeacherFormPage from './pages/TeacherFormPage';
+import StaffFormPage from './pages/StaffFormPage';
+import GuardDisplayPage from './pages/GuardDisplayPage';
+import WakeelFormPage from './pages/WakeelFormPage';
+import CounselorFormPage from './pages/CounselorFormPage';
+import AdminTardinessPage from './pages/AdminTardinessPage';
+import AuditLogPage from './pages/AuditLogPage';
+import ReportsPage from './pages/ReportsPage';
+import GeneralFormsPage from './pages/GeneralFormsPage';
+import './App.css';
+
+function getStoredUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function AppContent() {
+  const [sidebarOpen] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(getStoredUser);
+  const location = useLocation();
+
+  const handleLogin = useCallback((_token: string, u: AuthUser) => {
+    setUser(u);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+  }, []);
+
+  // Public routes — no auth required
+  if (location.pathname === '/form') {
+    return <TeacherFormPage />;
+  }
+  if (location.pathname === '/staff-form') {
+    return <StaffFormPage />;
+  }
+  if (location.pathname === '/guard') {
+    return <GuardDisplayPage />;
+  }
+  if (location.pathname === '/wakeel-form') {
+    return <WakeelFormPage />;
+  }
+  if (location.pathname === '/counselor-form') {
+    return <CounselorFormPage />;
+  }
+  if (location.pathname === '/admin-tardiness') {
+    return <AdminTardinessPage />;
+  }
+
+  // Not logged in → show login page
+  if (!user) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return (
+    <div style={{ display: 'flex', direction: 'rtl', fontFamily: "'Cairo', 'IBM Plex Sans Arabic', sans-serif", minHeight: '100vh' }}>
+      <Sidebar open={sidebarOpen} role={user.role} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        {/* Top Header */}
+        <header style={{
+          background: '#fff', borderBottom: '1px solid #e8ebf2',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 24px', height: '56px', minHeight: '56px',
+          boxShadow: '0 1px 4px rgba(0,0,0,.03)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <select id="stage-selector" style={{
+              padding: '8px 16px', border: '1.5px solid #e8ebf2', borderRadius: '8px',
+              fontSize: '14px', minWidth: '170px',
+            }}>
+              <option value="">جميع المراحل</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '13px', color: '#374151', fontWeight: 600 }}>{user.name}</span>
+            <span style={{ fontSize: '11px', color: '#9ca3af', background: '#f3f4f6', padding: '4px 8px', borderRadius: '6px' }}>{user.role}</span>
+            <button onClick={handleLogout} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 14px', background: '#fee2e2', color: '#dc2626',
+              borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+            }}>
+              خروج
+            </button>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main style={{ flex: 1, overflowY: 'auto', padding: '24px', background: '#f4f5f9' }}>
+          <Routes>
+            <Route path="/violations" element={<ViolationsPage />} />
+            <Route path="/positive" element={<PositiveBehaviorPage />} />
+            <Route path="/tardiness" element={<TardinessPage />} />
+            <Route path="/absence" element={<AbsencePage />} />
+            <Route path="/permissions" element={<PermissionsPage />} />
+            <Route path="/notes" element={<EducationalNotesPage />} />
+            <Route path="/whatsapp" element={<WhatsAppPage />} />
+            <Route path="/communication" element={<CommunicationPage />} />
+            <Route path="/noor" element={<NoorPage />} />
+            <Route path="/academic" element={<AcademicPage />} />
+            <Route path="/parent-excuse" element={<ParentExcusePage />} />
+            <Route path="/audit-log" element={<AuditLogPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/general-forms" element={<GeneralFormsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <ToastProvider />
+      <AppContent />
+    </BrowserRouter>
+  );
+}
+
+export default App;

@@ -1,0 +1,17 @@
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.deps.json
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.dll
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.pdb
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Application.dll
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Domain.dll
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Application.pdb
+D:\SchoolBehaviorSystem\src\Infrastructure\bin\Debug\net8.0\SchoolBehaviorSystem.Domain.pdb
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.csproj.AssemblyReference.cache
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.AssemblyInfoInputs.cache
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.AssemblyInfo.cs
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.csproj.CoreCompileInputs.cache
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBe.17A30F7B.Up2Date
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.dll
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\refint\SchoolBehaviorSystem.Infrastructure.dll
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\SchoolBehaviorSystem.Infrastructure.pdb
+D:\SchoolBehaviorSystem\src\Infrastructure\obj\Debug\net8.0\ref\SchoolBehaviorSystem.Infrastructure.dll
