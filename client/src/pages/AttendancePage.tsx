@@ -405,14 +405,6 @@ const ArchiveTab: React.FC<{ stageId: string | null }> = ({ stageId }) => {
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  // Default dates: last 7 days
-  useEffect(() => {
-    const today = new Date();
-    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    setDateTo(today.toISOString().split('T')[0]);
-    setDateFrom(weekAgo.toISOString().split('T')[0]);
-  }, []);
-
   const loadArchive = async () => {
     if (!dateFrom || !dateTo) { showError('يرجى تحديد تاريخ البداية والنهاية'); return; }
     setArchiveLoading(true); setSearched(true);
@@ -461,12 +453,12 @@ const ArchiveTab: React.FC<{ stageId: string | null }> = ({ stageId }) => {
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#4b5563', marginBottom: '6px' }}>من تاريخ</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' }} />
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#4b5563', marginBottom: '6px' }}>من تاريخ (هجري)</label>
+            <input type="text" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="مثال: 1447/01/01" style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#4b5563', marginBottom: '6px' }}>إلى تاريخ</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' }} />
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#4b5563', marginBottom: '6px' }}>إلى تاريخ (هجري)</label>
+            <input type="text" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="مثال: 1447/12/30" style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' }} />
           </div>
           <button onClick={loadArchive} style={{ height: '40px', padding: '0 20px', background: '#4f46e5', color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>🔍 بحث</button>
           <button onClick={handlePrint} disabled={archiveRecords.length === 0} style={{ height: '40px', padding: '0 20px', background: archiveRecords.length > 0 ? '#ede9fe' : '#f3f4f6', color: archiveRecords.length > 0 ? '#6d28d9' : '#9ca3af', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>🖨️ طباعة</button>
@@ -723,7 +715,7 @@ const ModalShell: React.FC<{
 );
 
 const ModalFooter: React.FC<{ saving: boolean; onClose: () => void; onSave: () => void; label: string; color: string }> = ({ saving, onClose, onSave, label, color }) => (
-  <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', margin: '-24px', marginTop: '24px' }}>
+  <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px', margin: '24px -24px -24px -24px' }}>
     <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>إلغاء</button>
     <button onClick={onSave} disabled={saving} style={{ padding: '10px 24px', background: color, color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'جاري الحفظ...' : label}</button>
   </div>

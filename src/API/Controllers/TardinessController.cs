@@ -332,7 +332,7 @@ public class TardinessController : ControllerBase
                 });
             }
             else failedCount++;
-            await Task.Delay(100);
+            await Task.Delay(10_000); // ★ 10 ثوان بين كل رسالة — مطابق لـ Utilities.sleep(10000) في Server_Absence_Daily.gs سطر 721
         }
 
         await _db.SaveChangesAsync();
