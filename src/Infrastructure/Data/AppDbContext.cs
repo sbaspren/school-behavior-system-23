@@ -37,6 +37,7 @@ public class AppDbContext : DbContext
     public DbSet<WhatsAppSession> WhatsAppSessions => Set<WhatsAppSession>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<WhatsAppSettings> WhatsAppSettings => Set<WhatsAppSettings>();
+    public DbSet<LinkedPerson> LinkedPersons => Set<LinkedPerson>();
 
     // Templates
     public DbSet<MessageTemplate> MessageTemplates => Set<MessageTemplate>();
@@ -196,6 +197,12 @@ public class AppDbContext : DbContext
         {
             e.ToTable("message_templates");
             e.HasIndex(x => x.Type).IsUnique();
+        });
+        modelBuilder.Entity<LinkedPerson>(e =>
+        {
+            e.ToTable("linked_persons");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Phone, x.Type });
         });
     }
 }

@@ -28,6 +28,9 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddHttpClient<IWhatsAppServerService, WhatsAppServerService>();
 builder.Services.AddHttpClient<ISmsService, SmsService>();
 
+// Background Services — مطابق لـ setupDailyBakeTrigger() في Server_TeacherInput.gs سطر 185-203
+builder.Services.AddHostedService<TeacherDataBakeService>();
+
 // JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SchoolBehaviorSystemDefaultKey2024!@#$%";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
