@@ -284,6 +284,24 @@ public class AbsenceController : ControllerBase
         return Ok(ApiResponse.Ok("تم تحديث حالة الإرسال"));
     }
 
+    // تحديث حالة الإرسال - جماعي
+    // ← مطابق لـ updateAbsenceSentStatus(stage, rowIndices) في Server_Absence_Daily.gs سطر 400
+    [HttpPut("sent-batch")]
+    public async Task<ActionResult<ApiResponse<object>>> UpdateSentStatusBatch([FromBody] BulkIdsRequest request)
+    {
+        if (request.Ids == null || request.Ids.Count == 0)
+            return Ok(ApiResponse<object>.Fail("لا توجد سجلات محددة"));
+
+        var records = await _db.DailyAbsences
+            .Where(r => request.Ids.Contains(r.Id))
+            .ToListAsync();
+
+        foreach (var r in records) r.IsSent = true;
+        await _db.SaveChangesAsync();
+
+        return Ok(ApiResponse<object>.Ok(new { updatedCount = records.Count }));
+    }
+
     // إرسال واتساب
     [HttpPost("{id}/send-whatsapp")]
     public async Task<ActionResult<ApiResponse<object>>> SendWhatsApp(int id, [FromBody] SendAbsWhatsAppRequest request)
@@ -669,6 +687,70 @@ public class AbsenceController : ControllerBase
         return Ok(ApiResponse.Ok("تم تحديث السجل التراكمي"));
     }
 
+    // استيراد ملف نور التراكمي (CSV)
+    // ← مطابق لـ processNoorAbsenceFile(fileContent, stage) في Server_Absence.gs سطر 48
+    // الملف من نور: العمود 0=تأخير، 1=غياب بدون عذر، 2=غياب بعذر، 9=الاسم
+    [HttpPost("cumulative/import-noor")]
+    public async Task<ActionResult<ApiResponse<object>>> ImportNoorCumulative([FromBody] NoorCumulativeImportRequest request)
+    {
+        if (request.Rows == null || request.Rows.Count == 0)
+            return Ok(ApiResponse<object>.Fail("لا توجد بيانات للاستيراد"));
+
+        // جلب جميع الطلاب للمطابقة بالاسم
+        var allStudents = await _db.Students.ToListAsync();
+        var studentsByNormName = allStudents
+            .GroupBy(s => NormalizeArabicName(s.Name))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        int updated = 0, notFound = 0;
+
+        foreach (var row in request.Rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.Name)) continue;
+            // تخطي صف الترويسة
+            if (row.Name.Contains("الاســـم") || row.Name.Contains("الاسم")) continue;
+
+            var normalName = NormalizeArabicName(row.Name);
+            if (!studentsByNormName.TryGetValue(normalName, out var student))
+            {
+                notFound++;
+                continue;
+            }
+
+            var cumulative = await _db.CumulativeAbsences
+                .FirstOrDefaultAsync(c => c.StudentId == student.Id);
+
+            if (cumulative == null)
+            {
+                cumulative = new CumulativeAbsence
+                {
+                    StudentId = student.Id,
+                    StudentNumber = student.StudentNumber,
+                    StudentName = student.Name,
+                    Grade = student.Grade,
+                    Class = student.Class,
+                    Stage = student.Stage
+                };
+                _db.CumulativeAbsences.Add(cumulative);
+            }
+
+            cumulative.LateDays = row.Late;
+            cumulative.UnexcusedDays = row.Unexcused;
+            cumulative.ExcusedDays = row.Excused;
+            cumulative.LastUpdated = DateTime.UtcNow;
+            updated++;
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            updatedCount = updated,
+            notFoundCount = notFound,
+            message = $"تم تحديث {updated} طالب ({notFound} لم يتم مطابقتهم)"
+        }));
+    }
+
     // إحصائيات متقدمة مع فلترة الصف والفصل
     [HttpGet("statistics")]
     public async Task<ActionResult<ApiResponse<object>>> GetStatistics(
@@ -920,4 +1002,18 @@ public class CumulativeUpdateRequest
     public int? ExcusedDays { get; set; }
     public int? UnexcusedDays { get; set; }
     public int? LateDays { get; set; }
+}
+
+// ← مطابق لبنية ملف نور CSV: العمود 0=تأخير، 1=بدون عذر، 2=بعذر، 9=الاسم
+public class NoorCumulativeRow
+{
+    public string Name { get; set; } = "";
+    public int Late { get; set; }
+    public int Unexcused { get; set; }
+    public int Excused { get; set; }
+}
+
+public class NoorCumulativeImportRequest
+{
+    public List<NoorCumulativeRow> Rows { get; set; } = new();
 }

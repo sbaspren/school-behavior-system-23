@@ -100,6 +100,34 @@ public class PermissionsController : ControllerBase
         }));
     }
 
+    // الاستئذانات المعلقة (للحارس)
+    // ← مطابق لـ getPendingPermissions(stage) في Server_Attendance.gs سطر 491
+    [HttpGet("pending")]
+    public async Task<ActionResult<ApiResponse<List<object>>>> GetPending([FromQuery] string? stage = null)
+    {
+        var today = DateTime.UtcNow.Date;
+        var query = _db.PermissionRecords
+            .Where(r => r.RecordedAt >= today && (r.ConfirmationTime == null || r.ConfirmationTime == ""));
+
+        if (!string.IsNullOrEmpty(stage) && Enum.TryParse<Stage>(stage, true, out var stageEnum))
+            query = query.Where(r => r.Stage == stageEnum);
+
+        var records = await query
+            .OrderByDescending(r => r.RecordedAt)
+            .Select(r => new
+            {
+                r.Id, r.StudentId, r.StudentNumber, r.StudentName,
+                r.Grade, className = r.Class,
+                stage = r.Stage.ToString(),
+                r.Mobile, r.ExitTime, r.Reason,
+                r.Receiver, r.Supervisor, r.HijriDate,
+                r.RecordedBy, r.RecordedAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<object>>.Ok(records.Cast<object>().ToList()));
+    }
+
     [HttpPost]
     public async Task<ActionResult<ApiResponse>> Add([FromBody] PermissionRequest request)
     {
