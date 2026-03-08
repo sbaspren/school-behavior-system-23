@@ -90,6 +90,8 @@ const TeachersTab: React.FC = () => {
   const [importPreview, setImportPreview] = useState<{ file: File; rows: { civilId: string; name: string; mobile: string; isExisting: boolean }[] } | null>(null);
   const [importUpdateExisting, setImportUpdateExisting] = useState(false);
   const [importing, setImporting] = useState(false);
+  // ★ Progress modal — مطابق للأصلي showImportProgressModal
+  const [importProgress, setImportProgress] = useState<{ text: string; pct: number; done: boolean } | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,18 +117,32 @@ const TeachersTab: React.FC = () => {
   const executeImport = async () => {
     if (!importPreview) return;
     setImporting(true);
+    setImportPreview(null);
+    // ★ إظهار نافذة التقدم بعد إغلاق المعاينة
+    setImportProgress({ text: 'جاري الاستيراد...', pct: 40, done: false });
+    const t1 = setTimeout(() => setImportProgress((p) => p && !p.done ? { ...p, text: 'جاري مقارنة البيانات...', pct: 65 } : p), 1800);
+    const t2 = setTimeout(() => setImportProgress((p) => p && !p.done ? { ...p, text: 'جاري الكتابة والحفظ...', pct: 85 } : p), 4000);
     try {
       const res = await teachersApi.importExcel(importPreview.file, importUpdateExisting);
+      clearTimeout(t1); clearTimeout(t2);
       if (res.data?.success) {
         const d = res.data.data;
-        showSuccess(`تم الاستيراد: ${d.added} جديد، ${d.updated} محدّث، ${d.skipped} متجاوز`);
-        setImportPreview(null);
-        loadData();
+        setImportProgress({ text: 'تم بنجاح!', pct: 100, done: true });
+        setTimeout(() => {
+          setImportProgress(null);
+          showSuccess(`تم الاستيراد: ${d.added} جديد، ${d.updated} محدّث، ${d.skipped} متجاوز`);
+          loadData();
+        }, 1200);
       } else {
+        clearTimeout(t1); clearTimeout(t2);
+        setImportProgress(null);
         showError(res.data?.message || 'فشل الاستيراد');
       }
-    } catch { showError('فشل الاتصال أثناء الاستيراد'); }
-    finally { setImporting(false); }
+    } catch {
+      clearTimeout(t1); clearTimeout(t2);
+      setImportProgress(null);
+      showError('فشل الاتصال أثناء الاستيراد');
+    } finally { setImporting(false); }
   };
 
   if (loading) {
@@ -333,6 +349,34 @@ const TeachersTab: React.FC = () => {
       {/* Delete Confirm */}
       {confirmDelete && (
         <ConfirmDeleteModal name={confirmDelete.name} onConfirm={handleDelete} onCancel={() => setConfirmDelete(null)} />
+      )}
+
+      {/* ★ Import Progress Modal — مطابق للأصلي showImportProgressModal */}
+      {importProgress && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#fff', borderRadius: '24px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', maxWidth: '420px', width: '100%', padding: '32px', textAlign: 'center' }}>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              background: importProgress.done ? '#dcfce7' : '#ccfbf1',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px', fontSize: '28px',
+            }}>
+              {importProgress.done ? '✅' : '🔄'}
+            </div>
+            <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 700, color: '#1f2937' }}>استيراد المعلمين</h3>
+            <p style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 600, color: importProgress.done ? '#15803d' : '#374151' }}>
+              {importProgress.text}
+            </p>
+            <div style={{ background: '#f3f4f6', borderRadius: '9999px', height: '12px', overflow: 'hidden', marginBottom: '8px' }}>
+              <div style={{
+                width: `${importProgress.pct}%`, height: '100%', borderRadius: '9999px',
+                background: importProgress.done ? 'linear-gradient(to left, #22c55e, #16a34a)' : 'linear-gradient(to left, #0d9488, #14b8a6)',
+                transition: 'width 0.7s ease-out',
+              }} />
+            </div>
+            <p style={{ margin: 0, fontSize: '13px', color: '#9ca3af' }}>{importProgress.pct}%</p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -103,6 +103,21 @@ const LinksTab: React.FC = () => {
     });
   };
 
+  // ★ إرسال الرابط عبر واتساب — مطابق للأصلي sendLinkToPersonDirect
+  const sendViaWhatsApp = (person: PersonLink) => {
+    if (!person.tokenLink) { showError('أنشئ الرابط أولاً'); return; }
+    if (!person.mobile) { showError(`لا يوجد جوال لـ ${person.name}`); return; }
+
+    const url = `${window.location.origin}/form/${person.tokenLink}`;
+    // تحويل الجوال إلى تنسيق دولي (05XXXXXXXX → 9665XXXXXXXX)
+    let mobile = person.mobile.replace(/\s|-/g, '');
+    if (mobile.startsWith('0')) mobile = '966' + mobile.slice(1);
+    else if (mobile.startsWith('+')) mobile = mobile.slice(1);
+
+    const msg = encodeURIComponent(`مرحباً ${person.name}،\nهذا رابط نموذج الإدخال الخاص بك:\n${url}`);
+    window.open(`https://wa.me/${mobile}?text=${msg}`, '_blank');
+  };
+
   const createLink = async (person: PersonLink) => {
     try {
       const api = person.type === 'teacher' ? teachersApi : usersApi;
@@ -263,6 +278,7 @@ const LinksTab: React.FC = () => {
           onToggleSelect={toggleSelect}
           onToggleSelectAll={() => toggleSelectAll('teacher')}
           onCopy={copyLink}
+          onSendWhatsApp={sendViaWhatsApp}
           onCreate={(p) => createLink(p)}
           onRemove={(p) => setConfirmAction({
             title: 'إلغاء الربط',
@@ -293,6 +309,7 @@ const LinksTab: React.FC = () => {
           onToggleSelect={toggleSelect}
           onToggleSelectAll={() => toggleSelectAll('admin')}
           onCopy={copyLink}
+          onSendWhatsApp={sendViaWhatsApp}
           onCreate={(p) => createLink(p)}
           onRemove={(p) => setConfirmAction({
             title: 'إلغاء الربط',
@@ -376,6 +393,7 @@ interface PersonSectionProps {
   onToggleSelect: (p: PersonLink) => void;
   onToggleSelectAll: () => void;
   onCopy: (p: PersonLink) => void;
+  onSendWhatsApp: (p: PersonLink) => void;
   onCreate: (p: PersonLink) => void;
   onRemove: (p: PersonLink) => void;
   onCreateAll: () => void;
@@ -385,7 +403,7 @@ interface PersonSectionProps {
 const PersonSection: React.FC<PersonSectionProps> = ({
   title, icon, gradientFrom, gradientTo, total, linked,
   persons, selectedIds, copiedId,
-  onToggleSelect, onToggleSelectAll, onCopy, onCreate, onRemove, onCreateAll, disabled,
+  onToggleSelect, onToggleSelectAll, onCopy, onSendWhatsApp, onCreate, onRemove, onCreateAll, disabled,
 }) => {
   const unlinked = persons.filter((p) => !p.tokenLink);
   const type = persons[0]?.type || 'teacher';
@@ -469,6 +487,15 @@ const PersonSection: React.FC<PersonSectionProps> = ({
                       borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer', fontSize: '13px',
                     }}>
                       {isCopied ? '✓ تم' : '📋 نسخ'}
+                    </button>
+                    {/* ★ زر واتساب — مطابق للأصلي sendLinkToPersonDirect */}
+                    <button onClick={() => onSendWhatsApp(person)} title={person.mobile ? `إرسال لـ ${person.mobile}` : 'لا يوجد جوال'} style={{
+                      padding: '8px 14px', background: person.mobile ? '#dcfce7' : '#f3f4f6',
+                      color: person.mobile ? '#15803d' : '#9ca3af',
+                      borderRadius: '8px', fontWeight: 700, border: 'none',
+                      cursor: person.mobile ? 'pointer' : 'not-allowed', fontSize: '13px',
+                    }}>
+                      📱 واتساب
                     </button>
                     <button onClick={() => onRemove(person)} style={{
                       padding: '8px 14px', background: '#fef2f2', color: '#dc2626',

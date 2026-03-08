@@ -102,28 +102,58 @@ const StudentsTab: React.FC = () => {
     } catch { showError('خطأ في الاتصال'); }
   };
 
+  const [importProgress, setImportProgress] = useState<{ fileName: string; text: string; pct: number; done: boolean } | null>(null);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
 
-    // تحديد المرحلة: من الفلتر الحالي أو فارغة (الباكند يكشفها تلقائياً)
+    // ★ تحديد المرحلة من الفلتر الحالي
     let importStage = '';
     if (stageFilter && stageFilter !== '__all__') {
       const stageId = SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter;
       importStage = stageId;
     }
 
+    // ★ إظهار نافذة التقدم — مطابق للأصلي showImportProgressModal
+    setImportProgress({ fileName: file.name, text: 'جاري رفع الملف وتحليل البيانات...', pct: 15, done: false });
+
+    // تحديثات تدريجية للتقدم أثناء انتظار السيرفر
+    const t1 = setTimeout(() => setImportProgress((p) => p && !p.done ? { ...p, text: 'جاري فرز الطلاب حسب المرحلة...', pct: 40 } : p), 1500);
+    const t2 = setTimeout(() => setImportProgress((p) => p && !p.done ? { ...p, text: 'جاري مقارنة البيانات بالموجود...', pct: 60 } : p), 3500);
+    const t3 = setTimeout(() => setImportProgress((p) => p && !p.done ? { ...p, text: 'جاري كتابة الطلاب الجدد...', pct: 80 } : p), 6000);
+
     try {
       const res = await studentsApi.importExcel(file, importStage);
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
       if (res.data?.success) {
         const d = res.data.data;
-        showSuccess(`تم الاستيراد: ${d.added} جديد، ${d.updated} محدّث، ${d.skipped} متجاوز`);
-        loadData();
+        setImportProgress((p) => p ? { ...p, text: 'تم بنجاح!', pct: 100, done: true } : p);
+        setTimeout(() => {
+          setImportProgress(null);
+          const added = d?.added ?? 0;
+          const updated = d?.updated ?? 0;
+          if (added > 0 || updated > 0) {
+            let msg = '';
+            if (added > 0) msg += `إضافة ${added} طالب جديد`;
+            if (updated > 0) msg += (msg ? '\n' : '') + `تحديث ${updated} طالب`;
+            showSuccess(msg);
+          } else {
+            showSuccess(d?.message || 'تم الاستيراد');
+          }
+          loadData();
+        }, 1200);
       } else {
+        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+        setImportProgress(null);
         showError(res.data?.message || 'فشل الاستيراد');
       }
-    } catch { showError('فشل الاتصال أثناء الاستيراد'); }
+    } catch {
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+      setImportProgress(null);
+      showError('فشل الاتصال أثناء الاستيراد');
+    }
   };
 
   if (loading) {
@@ -259,6 +289,36 @@ const StudentsTab: React.FC = () => {
               <button onClick={() => setConfirmDelete(null)} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
               <button onClick={handleDelete} style={{ padding: '8px 24px', background: '#dc2626', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>حذف</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ★ Import Progress Modal — مطابق للأصلي showImportProgressModal */}
+      {importProgress && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#fff', borderRadius: '24px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', maxWidth: '420px', width: '100%', padding: '32px', textAlign: 'center' }}>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              background: importProgress.done ? '#dcfce7' : '#e0e7ff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px', fontSize: '28px',
+              animation: importProgress.done ? 'none' : 'spin 1.5s linear infinite',
+            }}>
+              {importProgress.done ? '✅' : '🔄'}
+            </div>
+            <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 700, color: '#1f2937' }}>استيراد الطلاب</h3>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#6b7280', wordBreak: 'break-all' }}>{importProgress.fileName}</p>
+            <p style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 600, color: importProgress.done ? '#15803d' : '#374151' }}>
+              {importProgress.text}
+            </p>
+            <div style={{ background: '#f3f4f6', borderRadius: '9999px', height: '12px', overflow: 'hidden', marginBottom: '8px' }}>
+              <div style={{
+                width: `${importProgress.pct}%`, height: '100%', borderRadius: '9999px',
+                background: importProgress.done ? 'linear-gradient(to left, #22c55e, #16a34a)' : 'linear-gradient(to left, #6366f1, #4f46e5)',
+                transition: 'width 0.7s ease-out',
+              }} />
+            </div>
+            <p style={{ margin: 0, fontSize: '13px', color: '#9ca3af' }}>{importProgress.pct}%</p>
           </div>
         </div>
       )}

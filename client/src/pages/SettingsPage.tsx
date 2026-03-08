@@ -25,6 +25,7 @@ const SettingsPage: React.FC = () => {
     schoolName: '', eduAdmin: '', eduDept: '',
     letterheadMode: 'Image', letterheadImageUrl: '',
     whatsAppMode: 'PerStage', schoolType: 'Boys', secondarySystem: 'Semester',
+    managerName: '', deputyName: '', counselorName: '', committeeName: '', wakeelName: '', wakeelSignature: '',
   });
   const [structureData, setStructureData] = useState<StageConfigData[]>([]);
 
@@ -305,6 +306,36 @@ const SchoolTab: React.FC<SchoolTabProps> = ({ data, onChange, onSaved }) => {
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0' }}>رقم رئيسي واحد يُستخدم لجميع المراحل</p>
                 </div>
               </label>
+            </div>
+          </div>
+
+          {/* ★ طاقم العمل والتوقيعات — تُستخدم في المطبوعات */}
+          <div style={{ background: 'linear-gradient(to left, #fef9ec, #fffbeb)', borderRadius: '16px', padding: '20px', border: '1px solid #fde68a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <span>👔</span>
+              <h4 style={{ margin: 0, fontWeight: 700, color: '#1f2937' }}>طاقم العمل والتوقيعات</h4>
+              <span style={{ fontSize: '12px', color: '#92400e', background: '#fef3c7', padding: '2px 8px', borderRadius: '9999px' }}>تظهر في أسفل المطبوعات</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {[
+                { key: 'managerName', label: 'مدير المدرسة', placeholder: 'اسم المدير' },
+                { key: 'deputyName', label: 'وكيل المدرسة', placeholder: 'اسم الوكيل' },
+                { key: 'counselorName', label: 'المرشد الطلابي', placeholder: 'اسم المرشد' },
+                { key: 'committeeName', label: 'لجنة السلوك', placeholder: 'اسم رئيس اللجنة' },
+                { key: 'wakeelName', label: 'الوكيل (للطباعة)', placeholder: 'اسم الوكيل في التقارير' },
+                { key: 'wakeelSignature', label: 'بيانات التوقيع', placeholder: 'النص أسفل التوقيع' },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>{label}</label>
+                  <input
+                    type="text"
+                    value={(data as any)[key] || ''}
+                    onChange={(e) => onChange({ ...data, [key]: e.target.value })}
+                    placeholder={placeholder}
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '10px', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              ))}
             </div>
           </div>
 

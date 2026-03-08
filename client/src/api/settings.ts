@@ -10,6 +10,13 @@ export interface SchoolSettingsData {
   whatsAppMode: string;
   schoolType: string;
   secondarySystem: string;
+  // ★ حقول طاقم العمل — تُستخدم في المطبوعات والتقارير
+  managerName?: string;
+  deputyName?: string;
+  counselorName?: string;
+  committeeName?: string;
+  wakeelName?: string;
+  wakeelSignature?: string;
 }
 
 export interface GradeConfigData {
