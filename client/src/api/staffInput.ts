@@ -17,6 +17,9 @@ export interface StaffVerifyData {
   success: boolean;
   sn: string;          // school name
   staff: StaffInfo;
+  gradeMap: Record<string, string[]>;  // ★ stage → grade names
+  enabledStages: string[];             // ★ enabled stage names
+  token: string;                       // ★ echo back
 }
 
 export interface StaffStudent {
@@ -42,9 +45,9 @@ export interface GuardPermissionRecord {
   confirmed: boolean;
 }
 
+// ★ مطابق للأصلي: مجمّع حسب المرحلة
 export interface TodayEntries {
-  permissions: { type: string; studentName: string; grade: string; className: string; stage: string; reason: string; exitTime: string; recordedBy: string; time: string }[];
-  tardiness: { type: string; studentName: string; grade: string; className: string; stage: string; recordedBy: string; time: string }[];
+  entries: Record<string, { name: string; type: string; time: string }[]>;
 }
 
 export const staffInputApi = {
@@ -77,3 +80,26 @@ export const staffInputApi = {
   getTodayEntries: (token: string) =>
     publicApi.get<{ data: TodayEntries }>(`/staffinput/public/today-entries?token=${token}`),
 };
+
+// ★ Helper: Flatten grade students (2-level selection for permission/tardiness)
+export interface FlatStudent extends StaffStudent {
+  cls: string;   // full class name (e.g., "الأول أ")
+  sec: string;   // section letter (e.g., "أ")
+}
+
+export function flattenGradeStudents(
+  studentsMap: StudentsMap, stage: string, grade: string
+): FlatStudent[] {
+  const gradeData = studentsMap[stage]?.[grade];
+  if (!gradeData) return [];
+  const result: FlatStudent[] = [];
+  const classes = Object.keys(gradeData).sort();
+  for (const cls of classes) {
+    const sec = cls;
+    for (const s of gradeData[cls]) {
+      result.push({ ...s, cls: `${grade} ${cls}`, sec });
+    }
+  }
+  result.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  return result;
+}

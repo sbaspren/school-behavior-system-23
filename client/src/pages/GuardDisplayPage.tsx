@@ -37,8 +37,8 @@ const GuardDisplayPage: React.FC = () => {
         const d = res.data?.data;
         if (!d?.success) { setError(d?.sn || 'رابط غير صالح أو منتهي'); return; }
         setPageData(d);
-        // stages from enabled stages or fallback
-        const s = ['متوسط', 'ثانوي']; // default
+        // stages from enabled stages
+        const s = d.enabledStages || ['متوسط', 'ثانوي'];
         setStages(s);
         if (s.length > 0) setCurStage(s[0]);
       })

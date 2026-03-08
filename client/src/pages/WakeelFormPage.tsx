@@ -244,11 +244,18 @@ export default function WakeelFormPage() {
 
   const currentStudents = useMemo(() => {
     if (!selectedStage || !selectedGrade) return [];
-    // Permission & Tardiness: load all students for grade (all classes)
+    // Permission & Tardiness: load all students for grade (all classes) — ★ مع معلومات الفصل
     if (tab === 'permission' || tab === 'tardiness') {
       const gradeData = studentsMap[selectedStage]?.[selectedGrade];
       if (!gradeData) return [];
-      return Object.values(gradeData).flat();
+      const result: (StaffStudent & { _cls?: string; _sec?: string })[] = [];
+      for (const cls of Object.keys(gradeData).sort()) {
+        for (const s of gradeData[cls]) {
+          result.push({ ...s, _cls: `${selectedGrade} ${cls}`, _sec: cls });
+        }
+      }
+      result.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+      return result;
     }
     // Other tabs: need class selected
     if (!selectedClass) return [];
@@ -645,19 +652,24 @@ export default function WakeelFormPage() {
             {/* Selected chips */}
             {selectedStudents.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '8px 0' }}>
-                {selectedStudents.map(s => (
+                {selectedStudents.map(s => {
+                  const sec = (s as any)._sec;
+                  return (
                   <span key={s.id} onClick={() => toggleStudent(s)} style={{
                     padding: '4px 10px', borderRadius: '16px', fontSize: '12px', cursor: 'pointer',
                     background: tabColor + '20', color: tabColor, fontWeight: 600,
                   }}>
-                    {s.name} ✕
+                    {s.name.split(' ').slice(0, 2).join(' ')}{sec ? ` (${sec})` : ''} ✕
                   </span>
-                ))}
+                  );
+                })}
               </div>
             )}
 
             <div style={S.scrollList}>
-              {filteredStudents.map(s => (
+              {filteredStudents.map(s => {
+                const sec = (s as any)._sec;
+                return (
                 <div key={s.id} onClick={() => toggleStudent(s)} style={{
                   ...S.studentItem,
                   background: isSelected(s.id) ? tabColor + '10' : '#fff',
@@ -671,9 +683,11 @@ export default function WakeelFormPage() {
                   }}>
                     {isSelected(s.id) && '✓'}
                   </div>
-                  <span style={{ fontSize: '14px' }}>{s.name}</span>
+                  <span style={{ fontSize: '14px', flex: 1 }}>{s.name}</span>
+                  {sec && <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '8px', background: '#f3f4f6', color: '#6b7280' }}>{sec}</span>}
                 </div>
-              ))}
+                );
+              })}
               {filteredStudents.length === 0 && (
                 <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>
                   {currentStudents.length === 0 ? 'اختر المرحلة والصف' : 'لا توجد نتائج'}
@@ -705,27 +719,29 @@ export default function WakeelFormPage() {
               <button onClick={() => setShowLog(false)} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', maxHeight: '60vh', overflowY: 'auto' }}>
-              {logData?.permissions && logData.permissions.length > 0 && (
-                <>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#3b82f6', marginBottom: '8px' }}>الاستئذان ({logData.permissions.length})</div>
-                  {logData.permissions.map((e, i) => (
-                    <div key={i} style={{ padding: '8px', borderBottom: '1px solid #f3f4f6', fontSize: '13px' }}>
-                      {e.studentName} — {e.className} — {e.reason} — {e.time}
+              {logData?.entries ? (() => {
+                const entries = logData.entries;
+                const stageKeys = Object.keys(entries);
+                const total = stageKeys.reduce((sum, k) => sum + entries[k].length, 0);
+                if (total === 0) return <div style={{ textAlign: 'center', padding: '30px', color: '#9ca3af' }}>📭 لا توجد سجلات</div>;
+                return stageKeys.map(st => {
+                  const arr = entries[st];
+                  if (!arr?.length) return null;
+                  return (
+                    <div key={st}>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#6b7280', padding: '8px 12px', background: '#f3f4f6', borderRadius: '10px', margin: '12px 0 8px', textAlign: 'center' }}>🔷 {st} ({arr.length})</div>
+                      {arr.map((e, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 700 }}>{e.name}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '100px', color: '#fff', background: e.type === 'استئذان' ? '#3b82f6' : '#ea580c' }}>
+                            {e.type} {e.time}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </>
-              )}
-              {logData?.tardiness && logData.tardiness.length > 0 && (
-                <>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#f97316', margin: '12px 0 8px' }}>التأخر ({logData.tardiness.length})</div>
-                  {logData.tardiness.map((e, i) => (
-                    <div key={i} style={{ padding: '8px', borderBottom: '1px solid #f3f4f6', fontSize: '13px' }}>
-                      {e.studentName} — {e.className} — {e.time}
-                    </div>
-                  ))}
-                </>
-              )}
-              {(!logData?.permissions?.length && !logData?.tardiness?.length) && (
+                  );
+                });
+              })() : (
                 <div style={{ textAlign: 'center', padding: '30px', color: '#9ca3af' }}>لا توجد سجلات اليوم</div>
               )}
             </div>

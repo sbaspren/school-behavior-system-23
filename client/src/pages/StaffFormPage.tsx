@@ -1,46 +1,44 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  staffInputApi, StaffVerifyData, StaffStudent, StudentsMap,
-  GuardPermissionRecord, TodayEntries
+  staffInputApi, StaffVerifyData, StudentsMap, TodayEntries,
+  FlatStudent, flattenGradeStudents
 } from '../api/staffInput';
 
+// ★ خيارات مطابقة للأصلي — 4 أسباب + 3 مستلمين (بدون "أخرى")
 const REASONS = ['ظرف صحي', 'ظرف أسري', 'موعد حكومي', 'طلب ولي الأمر'];
-const GUARDIANS = ['الأب', 'الأخ', 'الأم', 'أخرى'];
+const GUARDIANS = ['الأب', 'الأخ', 'الأم'];
 
-type Tab = 'permission' | 'tardiness';
+type Tab = 'perm' | 'late';
 
-const StaffFormPage: React.FC = () => {
+export default function StaffFormPage() {
   const [params] = useSearchParams();
   const token = params.get('token') || '';
 
-  // Page state
   const [pageData, setPageData] = useState<StaffVerifyData | null>(null);
   const [studentsMap, setStudentsMap] = useState<StudentsMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Form state
-  const [tab, setTab] = useState<Tab>('permission');
-  const [selectedStage, setSelectedStage] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState('');
-  const [selectedClass, setSelectedClass] = useState('');
-  const [selectedStudents, setSelectedStudents] = useState<StaffStudent[]>([]);
-  const [reason, setReason] = useState(REASONS[0]);
-  const [guardian, setGuardian] = useState(GUARDIANS[0]);
+  const [tab, setTab] = useState<Tab>('perm');
+  const [stage, setStage] = useState('');
+  const [grade, setGrade] = useState('');
+  const [selected, setSelected] = useState<FlatStudent[]>([]);
+  const [reason, setReason] = useState('');
+  const [guardian, setGuardian] = useState('');
   const [search, setSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  // Guard state
-  const [guardRecords, setGuardRecords] = useState<GuardPermissionRecord[]>([]);
-  const [guardLoading, setGuardLoading] = useState(false);
-
-  // Log modal
+  const [toast, setToast] = useState<{ msg: string; cls: string } | null>(null);
   const [showLog, setShowLog] = useState(false);
   const [logData, setLogData] = useState<TodayEntries | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // ── Load page data ──
+  const showToast = useCallback((msg: string, cls: string) => {
+    setToast({ msg, cls });
+    setTimeout(() => setToast(null), 2500);
+  }, []);
+
+  // ── Load data ──
   const loadData = useCallback(async () => {
     if (!token) { setError('لا يوجد رمز'); setLoading(false); return; }
     try {
@@ -51,7 +49,7 @@ const StaffFormPage: React.FC = () => {
       if (vRes.data?.data) setPageData(vRes.data.data);
       if (sRes.data?.data) setStudentsMap(sRes.data.data);
     } catch {
-      setError('رابط غير صالح أو حدث خطأ');
+      setError('رابط غير صالح أو منتهي الصلاحية');
     } finally {
       setLoading(false);
     }
@@ -59,466 +57,374 @@ const StaffFormPage: React.FC = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Load guard permissions ──
-  const loadGuardRecords = useCallback(async () => {
-    if (!pageData?.staff.isGuard) return;
-    setGuardLoading(true);
-    try {
-      const res = await staffInputApi.getGuardPermissions(token);
-      if (res.data?.data) setGuardRecords(Array.isArray(res.data.data) ? res.data.data : []);
-    } catch { /* empty */ }
-    finally { setGuardLoading(false); }
-  }, [token, pageData]);
+  // ── Derived ──
+  const stages = useMemo(() => pageData?.gradeMap ? Object.keys(pageData.gradeMap) : [], [pageData]);
+  const grades = useMemo(() => stage && pageData?.gradeMap?.[stage] ? pageData.gradeMap[stage] : [], [pageData, stage]);
 
-  useEffect(() => { if (pageData?.staff.isGuard) loadGuardRecords(); }, [loadGuardRecords, pageData]);
-
-  // ── Derived data ──
-  const stages = useMemo(() => Object.keys(studentsMap), [studentsMap]);
-  const grades = useMemo(() =>
-    selectedStage && studentsMap[selectedStage] ? Object.keys(studentsMap[selectedStage]) : [],
-    [studentsMap, selectedStage]
-  );
-  const classes = useMemo(() =>
-    selectedStage && selectedGrade && studentsMap[selectedStage]?.[selectedGrade]
-      ? Object.keys(studentsMap[selectedStage][selectedGrade]) : [],
-    [studentsMap, selectedStage, selectedGrade]
-  );
-  const currentStudents = useMemo(() =>
-    selectedStage && selectedGrade && selectedClass
-      ? studentsMap[selectedStage]?.[selectedGrade]?.[selectedClass] || []
-      : [],
-    [studentsMap, selectedStage, selectedGrade, selectedClass]
+  // ★ 2-level: flatten all classes under selected grade
+  const allStudents = useMemo(() =>
+    stage && grade ? flattenGradeStudents(studentsMap, stage, grade) : [],
+    [studentsMap, stage, grade]
   );
 
-  const filteredStudents = useMemo(() => {
-    if (!search) return currentStudents;
-    const q = search.toLowerCase();
-    return currentStudents.filter(s => s.name.toLowerCase().includes(q));
-  }, [currentStudents, search]);
+  const filtered = useMemo(() => {
+    if (!search) return allStudents;
+    return allStudents.filter(s => s.name.includes(search));
+  }, [allStudents, search]);
 
-  const isSelected = useCallback((id: number) =>
-    selectedStudents.some(s => s.id === id), [selectedStudents]);
+  const isSelected = useCallback((id: number) => selected.some(s => s.id === id), [selected]);
 
-  // ── Auto-select first stage ──
+  // ── Auto-select single stage ──
   useEffect(() => {
-    if (stages.length === 1 && !selectedStage) setSelectedStage(stages[0]);
-  }, [stages, selectedStage]);
+    if (stages.length === 1 && !stage) setStage(stages[0]);
+  }, [stages, stage]);
 
-  // ── Set tab based on permissions ──
-  useEffect(() => {
-    if (!pageData) return;
-    const perms = pageData.staff.permissions;
-    if (perms.includes('permission')) setTab('permission');
-    else if (perms.includes('tardiness')) setTab('tardiness');
-  }, [pageData]);
-
-  // ── Reset selections when stage/grade changes ──
-  useEffect(() => { setSelectedGrade(''); setSelectedClass(''); setSelectedStudents([]); }, [selectedStage]);
-  useEffect(() => { setSelectedClass(''); setSelectedStudents([]); }, [selectedGrade]);
-  useEffect(() => { setSelectedStudents([]); }, [selectedClass]);
+  // ── Reset on change ──
+  useEffect(() => { setGrade(''); setSelected([]); setSearch(''); }, [stage]);
+  useEffect(() => { setSelected([]); setSearch(''); }, [grade]);
 
   // ── Actions ──
-  const toggleStudent = (s: StaffStudent) => {
-    setSelectedStudents(prev =>
-      prev.some(x => x.id === s.id) ? prev.filter(x => x.id !== s.id) : [...prev, s]
-    );
+  const toggleStudent = (s: FlatStudent) => {
+    setSelected(prev => prev.some(x => x.id === s.id) ? prev.filter(x => x.id !== s.id) : [...prev, s]);
   };
 
   const selectAll = () => {
-    const toAdd = filteredStudents.filter(s => !isSelected(s.id));
-    if (toAdd.length > 0) setSelectedStudents(prev => [...prev, ...toAdd]);
-    else setSelectedStudents(prev => prev.filter(s => !filteredStudents.some(f => f.id === s.id)));
+    const allOn = filtered.every(s => isSelected(s.id));
+    if (allOn) {
+      const ids = new Set(filtered.map(s => s.id));
+      setSelected(prev => prev.filter(s => !ids.has(s.id)));
+    } else {
+      const toAdd = filtered.filter(s => !isSelected(s.id));
+      setSelected(prev => [...prev, ...toAdd]);
+    }
   };
 
-  const removeStudent = (id: number) => {
-    setSelectedStudents(prev => prev.filter(s => s.id !== id));
-  };
+  const removeStudent = (id: number) => setSelected(prev => prev.filter(s => s.id !== id));
+
+  const canSubmit = useMemo(() => {
+    if (selected.length === 0 || !stage || !grade) return false;
+    if (tab === 'perm') return !!reason && !!guardian;
+    return true;
+  }, [selected, stage, grade, tab, reason, guardian]);
 
   const handleSubmit = async () => {
-    if (selectedStudents.length === 0) { setMsg('اختر طلاباً أولاً'); return; }
+    if (!canSubmit || submitting) return;
     setSubmitting(true);
-    setMsg('');
     try {
-      if (tab === 'permission') {
-        const res = await staffInputApi.savePermission({
-          token, studentIds: selectedStudents.map(s => s.id),
-          reason, guardian,
-        });
-        setMsg(res.data?.data?.message || 'تم الحفظ');
+      const ids = selected.map(s => s.id);
+      if (tab === 'perm') {
+        const res = await staffInputApi.savePermission({ token, studentIds: ids, reason, guardian });
+        showToast(`✅ تم تسجيل الاستئذان — ${res.data?.data?.count || ids.length} طالب`, 'ts');
       } else {
-        const res = await staffInputApi.saveTardiness({
-          token, studentIds: selectedStudents.map(s => s.id),
-        });
-        setMsg(res.data?.data?.message || 'تم الحفظ');
+        const res = await staffInputApi.saveTardiness({ token, studentIds: ids });
+        showToast(`✅ تم تسجيل التأخر — ${res.data?.data?.count || ids.length} طالب`, 'ts');
       }
-      setSelectedStudents([]);
+      setSelected([]);
+      setReason(''); setGuardian('');
     } catch {
-      setMsg('حدث خطأ أثناء الحفظ');
+      showToast('❌ حدث خطأ أثناء الحفظ', 'te');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleConfirmExit = async (id: number) => {
+  const doRefresh = async () => {
+    setRefreshing(true);
     try {
-      await staffInputApi.confirmExit(id, token);
-      loadGuardRecords();
-    } catch { /* empty */ }
+      const res = await staffInputApi.getStudents(token);
+      if (res.data?.data) { setStudentsMap(res.data.data); showToast('✅ تم التحديث', 'ts'); }
+    } catch { showToast('❌ فشل التحديث', 'te'); }
+    finally { setRefreshing(false); }
   };
 
   const openLog = async () => {
-    setShowLog(true);
+    setShowLog(true); setLogData(null);
     try {
       const res = await staffInputApi.getTodayEntries(token);
       if (res.data?.data) setLogData(res.data.data);
     } catch { /* empty */ }
   };
 
-  // ── Render ──
+  const swTab = (t: Tab) => {
+    setTab(t);
+    setSelected([]); setSearch('');
+  };
 
-  if (loading) return (
-    <div style={styles.center}>
-      <div style={{ fontSize: '18px', color: '#6b7280' }}>جاري التحميل...</div>
-    </div>
-  );
+  // ── Render ──
+  if (loading) return <div style={S.center}><div style={S.loadingText}>⏳ جاري التحميل...</div></div>;
 
   if (error || !pageData) return (
-    <div style={styles.center}>
-      <div style={{ fontSize: '18px', color: '#ef4444' }}>{error || 'خطأ غير متوقع'}</div>
+    <div style={S.center}>
+      <div style={S.errScr}>
+        <div style={{ fontSize: '64px', marginBottom: '16px' }}>🔒</div>
+        <div style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>رابط غير صالح</div>
+        <div style={{ color: '#6b7280', fontSize: '14px' }}>{error || 'تأكد من صحة الرابط'}</div>
+      </div>
     </div>
   );
 
   const { staff } = pageData;
-  const isGuard = staff.isGuard;
-  const perms = staff.permissions;
-  const canPermission = perms.includes('permission');
-  const canTardiness = perms.includes('tardiness');
-  const tabColor = tab === 'permission' ? '#3b82f6' : '#f97316';
+  const tabColor = tab === 'perm' ? '#3b82f6' : '#ea580c';
+  const headerBg = tab === 'perm'
+    ? 'linear-gradient(135deg, #1e40af, #3b82f6)'
+    : 'linear-gradient(135deg, #c2410c, #ea580c)';
 
   return (
-    <div style={styles.page}>
+    <div style={S.page}>
       {/* Header */}
-      <div style={{ ...styles.header, background: tabColor }}>
-        <div style={{ fontSize: '18px', fontWeight: 700 }}>
-          {pageData.sn || 'شؤون الطلاب'}
-        </div>
-        <div style={{ fontSize: '13px', opacity: 0.9, marginTop: '4px' }}>
-          {staff.name} — {staff.role === 'Guard' ? 'حارس' : staff.role === 'Deputy' ? 'وكيل' : staff.role === 'Counselor' ? 'موجه' : staff.role === 'Admin' ? 'مدير' : 'موظف'}
+      <div style={{ ...S.header, background: headerBg }}>
+        <div style={S.hdrRow}>
+          <div>
+            <h1 style={S.hdrTitle}>📋 التأخر والاستئذان</h1>
+            <div style={S.hdrSub}>👤 {staff.name}{staff.role ? ` — ${staff.role}` : ''}</div>
+          </div>
+          <button onClick={doRefresh} style={S.hdrBtn}>
+            <span style={refreshing ? { display: 'inline-block', animation: 'spin .8s linear infinite' } : {}}>🔄</span>
+          </button>
         </div>
       </div>
 
-      {/* Guard view */}
-      {isGuard ? (
-        <div style={styles.content}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', color: '#374151' }}>
-            المستأذنون اليوم
-          </h3>
-          {guardLoading ? (
-            <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>جاري التحميل...</div>
-          ) : guardRecords.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>لا يوجد مستأذنون اليوم</div>
-          ) : (
-            guardRecords.map(r => (
-              <div key={r.id} style={{
-                background: '#fff', borderRadius: '16px', padding: '12px',
-                marginBottom: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                borderRight: `4px solid ${r.confirmed ? '#22c55e' : '#f97316'}`,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '15px' }}>{r.studentName}</div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>{r.grade} / {r.className}</div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                      السبب: {r.reason || '-'} | المستلم: {r.receiver || '-'} | الخروج: {r.exitTime || '-'}
-                    </div>
-                  </div>
-                  <div>
-                    {r.confirmed ? (
-                      <span style={{
-                        background: '#dcfce7', color: '#15803d', padding: '4px 12px',
-                        borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                      }}>
-                        خرج {r.confirmationTime}
-                      </span>
-                    ) : (
-                      <button onClick={() => handleConfirmExit(r.id)} style={{
-                        background: '#f97316', color: '#fff', border: 'none',
-                        borderRadius: '8px', padding: '6px 16px', fontSize: '13px',
-                        fontWeight: 700, cursor: 'pointer',
-                      }}>
-                        تأكيد الخروج
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-          <button onClick={loadGuardRecords} style={{
-            width: '100%', padding: '10px', background: '#6366f1', color: '#fff',
-            border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700,
-            cursor: 'pointer', marginTop: '12px',
-          }}>
-            تحديث
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Tabs */}
-          {canPermission && canTardiness && (
-            <div style={{ display: 'flex', borderBottom: '2px solid #e5e7eb' }}>
-              <button onClick={() => setTab('permission')} style={{
-                flex: 1, padding: '12px', border: 'none', fontSize: '14px', fontWeight: 700,
-                cursor: 'pointer',
-                background: tab === 'permission' ? '#3b82f6' : '#f3f4f6',
-                color: tab === 'permission' ? '#fff' : '#6b7280',
-              }}>
-                استئذان
-              </button>
-              <button onClick={() => setTab('tardiness')} style={{
-                flex: 1, padding: '12px', border: 'none', fontSize: '14px', fontWeight: 700,
-                cursor: 'pointer',
-                background: tab === 'tardiness' ? '#f97316' : '#f3f4f6',
-                color: tab === 'tardiness' ? '#fff' : '#6b7280',
-              }}>
-                تأخر
-              </button>
-            </div>
-          )}
+      {/* Tabs */}
+      <div style={S.tabs}>
+        <button onClick={() => swTab('perm')}
+          style={{ ...S.tab, ...(tab === 'perm' ? { color: '#fff', background: 'linear-gradient(135deg, #1e40af, #3b82f6)' } : {}) }}>
+          🚪 استئذان
+        </button>
+        <button onClick={() => swTab('late')}
+          style={{ ...S.tab, ...(tab === 'late' ? { color: '#fff', background: 'linear-gradient(135deg, #c2410c, #ea580c)' } : {}) }}>
+          ⏰ تأخر
+        </button>
+      </div>
 
-          <div style={styles.content}>
-            {/* Stage → Grade → Class selectors */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-              {stages.length > 1 && (
-                <select value={selectedStage} onChange={e => setSelectedStage(e.target.value)}
-                  style={styles.select}>
-                  <option value="">المرحلة</option>
-                  {stages.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              )}
-              <select value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)}
-                style={styles.select} disabled={!selectedStage}>
-                <option value="">الصف</option>
+      <div style={S.main}>
+        {/* Card: المرحلة والصف */}
+        <div style={{ ...S.card, borderColor: tab === 'perm' ? 'rgba(59,130,246,.15)' : 'rgba(234,88,12,.15)' }}>
+          <div style={S.cardTitle}>🏫 المرحلة والصف</div>
+          <div style={S.fr}>
+            <div>
+              <div style={S.fl}>المرحلة</div>
+              <select value={stage} onChange={e => setStage(e.target.value)} style={S.sel}>
+                <option value="">اختر</option>
+                {stages.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={S.fl}>الصف</div>
+              <select value={grade} onChange={e => setGrade(e.target.value)} style={S.sel} disabled={!stage}>
+                <option value="">اختر</option>
                 {grades.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
-              <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
-                style={styles.select} disabled={!selectedGrade}>
-                <option value="">الفصل</option>
-                {classes.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
             </div>
+          </div>
+        </div>
 
-            {/* Permission-specific fields */}
-            {tab === 'permission' && (
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                <select value={reason} onChange={e => setReason(e.target.value)} style={styles.select}>
+        {/* Card: Permission details */}
+        {tab === 'perm' && (
+          <div style={{ ...S.card, borderColor: 'rgba(59,130,246,.15)' }}>
+            <div style={S.cardTitle}>📝 تفاصيل الاستئذان</div>
+            <div style={S.fr}>
+              <div>
+                <div style={S.fl}>السبب</div>
+                <select value={reason} onChange={e => setReason(e.target.value)} style={S.sel}>
+                  <option value="">اختر</option>
                   {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
-                <select value={guardian} onChange={e => setGuardian(e.target.value)} style={styles.select}>
+              </div>
+              <div>
+                <div style={S.fl}>المستلم</div>
+                <select value={guardian} onChange={e => setGuardian(e.target.value)} style={S.sel}>
+                  <option value="">اختر</option>
                   {GUARDIANS.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
-            {/* Selected students chips */}
-            {selectedStudents.length > 0 && (
-              <div style={{
-                display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px',
-                padding: '8px', background: '#f0f9ff', borderRadius: '8px',
-              }}>
-                {selectedStudents.map(s => (
-                  <span key={s.id} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                    background: tabColor, color: '#fff', padding: '4px 10px',
-                    borderRadius: '100px', fontSize: '12px', fontWeight: 600,
-                  }}>
-                    {shortenName(s.name)}
-                    <span onClick={() => removeStudent(s.id)} style={{
-                      cursor: 'pointer', marginRight: '2px', fontSize: '14px', lineHeight: 1,
-                    }}>&times;</span>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Search + Select all */}
-            {selectedClass && (
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
-                <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="بحث عن طالب..."
-                  style={{ flex: 1, padding: '8px 12px', border: '2px solid #e5e7eb', borderRadius: '12px', fontSize: '13px' }} />
-                <button onClick={selectAll} style={{
-                  padding: '8px 14px', background: '#e5e7eb', border: 'none',
-                  borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
-                }}>
-                  {filteredStudents.every(s => isSelected(s.id)) && filteredStudents.length > 0 ? 'إلغاء الكل' : 'تحديد الكل'}
-                </button>
-              </div>
-            )}
-
-            {/* Student list */}
-            {selectedClass && (
-              <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '12px' }}>
-                {filteredStudents.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>لا يوجد طلاب</div>
-                ) : (
-                  filteredStudents.map(s => (
-                    <div key={s.id} onClick={() => toggleStudent(s)} style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '10px 12px', cursor: 'pointer',
-                      borderBottom: '1px solid #f3f4f6',
-                      background: isSelected(s.id) ? (tab === 'permission' ? '#eff6ff' : '#fff7ed') : '#fff',
-                    }}>
-                      <div style={{
-                        width: '22px', height: '22px', borderRadius: '6px',
-                        border: `2px solid ${isSelected(s.id) ? tabColor : '#d1d5db'}`,
-                        background: isSelected(s.id) ? tabColor : '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: '12px', flexShrink: 0,
-                      }}>
-                        {isSelected(s.id) && '\u2713'}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 600 }}>{s.name}</div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Message */}
-            {msg && (
-              <div style={{
-                padding: '10px', borderRadius: '8px', marginBottom: '10px', textAlign: 'center',
-                fontSize: '14px', fontWeight: 600,
-                background: msg.includes('خطأ') ? '#fee2e2' : '#dcfce7',
-                color: msg.includes('خطأ') ? '#dc2626' : '#15803d',
-              }}>
-                {msg}
-              </div>
+        {/* Card: Students */}
+        <div style={{ ...S.card, borderColor: tab === 'perm' ? 'rgba(59,130,246,.15)' : 'rgba(234,88,12,.15)' }}>
+          <div style={S.cardTitle}>
+            👥 {tab === 'perm' ? 'الطلاب' : 'المتأخرين'}
+            {selected.length > 0 && (
+              <span style={{ ...S.badge, background: tabColor }}>{selected.length}</span>
             )}
           </div>
 
-          {/* Bottom fixed bar */}
-          <div style={{
-            position: 'fixed', bottom: 0, left: 0, right: 0,
-            display: 'flex', gap: '8px', padding: '10px 16px',
-            background: '#fff', borderTop: '1px solid #e5e7eb',
-            boxShadow: '0 -4px 12px rgba(0,0,0,.06)',
-          }}>
-            <button onClick={handleSubmit} disabled={submitting || selectedStudents.length === 0}
-              style={{
-                flex: 1, padding: '16px', border: 'none', borderRadius: '14px',
-                fontSize: '17px', fontWeight: 700, cursor: 'pointer',
-                background: selectedStudents.length === 0 ? '#d1d5db' : tabColor,
-                color: '#fff', opacity: submitting ? 0.6 : 1,
-                boxShadow: '0 4px 14px rgba(0,0,0,.15)',
-              }}>
-              {submitting ? 'جاري الحفظ...'
-                : tab === 'permission'
-                  ? `تسجيل استئذان (${selectedStudents.length})`
-                  : `تسجيل تأخر (${selectedStudents.length})`
-              }
-            </button>
-            <button onClick={openLog} style={{
-              padding: '12px 16px', background: '#f3f4f6', border: 'none',
-              borderRadius: '10px', fontSize: '14px', fontWeight: 700,
-              cursor: 'pointer', color: '#374151',
-            }}>
-              السجل
-            </button>
-          </div>
+          {/* Search */}
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="🔍 ابحث عن طالب..." style={S.sb} />
 
-          {/* Log modal */}
-          {showLog && (
-            <div style={styles.overlay} onClick={() => setShowLog(false)}>
-              <div style={styles.modal} onClick={e => e.stopPropagation()}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>سجل اليوم</h3>
-                  <button onClick={() => setShowLog(false)} style={{
-                    background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#6b7280',
-                  }}>&times;</button>
+          {/* Student list */}
+          <div style={S.sl}>
+            {!grade ? (
+              <div style={S.empty}>اختر المرحلة والصف أولاً</div>
+            ) : filtered.length === 0 ? (
+              <div style={S.empty}>لا يوجد طلاب</div>
+            ) : (
+              <>
+                <div onClick={selectAll} style={S.sa}>
+                  <span style={S.sat}>تحديد الكل ({filtered.length})</span>
                 </div>
-                {!logData ? (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>جاري التحميل...</div>
-                ) : (
-                  <>
-                    {logData.permissions.length > 0 && (
-                      <>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#3b82f6', marginBottom: '8px' }}>
-                          الاستئذان ({logData.permissions.length})
-                        </div>
-                        {logData.permissions.map((r, i) => (
-                          <div key={i} style={{ fontSize: '13px', padding: '6px 0', borderBottom: '1px solid #f3f4f6' }}>
-                            {r.studentName} — {r.grade}/{r.className} — {r.reason} — {r.recordedBy}
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    {logData.tardiness.length > 0 && (
-                      <>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#f97316', marginTop: '12px', marginBottom: '8px' }}>
-                          التأخر ({logData.tardiness.length})
-                        </div>
-                        {logData.tardiness.map((r, i) => (
-                          <div key={i} style={{ fontSize: '13px', padding: '6px 0', borderBottom: '1px solid #f3f4f6' }}>
-                            {r.studentName} — {r.grade}/{r.className} — {r.recordedBy}
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    {logData.permissions.length === 0 && logData.tardiness.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>لا توجد سجلات اليوم</div>
-                    )}
-                  </>
-                )}
-              </div>
+                {filtered.map(s => {
+                  const on = isSelected(s.id);
+                  return (
+                    <div key={s.id} onClick={() => toggleStudent(s)}
+                      style={{ ...S.si, background: on ? (tab === 'perm' ? '#eff6ff' : '#fff7ed') : '#fff' }}>
+                      <div style={{
+                        ...S.ck,
+                        background: on ? tabColor : '#fff',
+                        borderColor: on ? tabColor : '#d1d5db',
+                        color: '#fff'
+                      }}>
+                        {on && '✓'}
+                      </div>
+                      <span style={S.sn}>{s.name}</span>
+                      <span style={S.ct}>{s.sec}</span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          {/* Chips */}
+          {selected.length > 0 && (
+            <div style={S.chips}>
+              {selected.map(s => (
+                <span key={s.id} style={{ ...S.chip, background: tabColor }}>
+                  {shortenName(s.name)} <span style={S.chipC}>({s.sec})</span>
+                  <span style={S.chipX} onClick={(e) => { e.stopPropagation(); removeStudent(s.id); }}>✕</span>
+                </span>
+              ))}
             </div>
           )}
-        </>
+        </div>
+      </div>
+
+      {/* Bottom bar */}
+      <div style={S.bbar}>
+        <div style={S.bbarIn}>
+          <button onClick={handleSubmit} disabled={!canSubmit || submitting}
+            style={{
+              ...S.btnS,
+              background: canSubmit ? (tab === 'perm' ? 'linear-gradient(135deg,#1e40af,#3b82f6)' : 'linear-gradient(135deg,#c2410c,#ea580c)') : '#d1d5db',
+              opacity: submitting ? 0.6 : 1,
+            }}>
+            {submitting ? '⏳ جاري...' : tab === 'perm' ? '✅ تسجيل الاستئذان' : '✅ تسجيل التأخر'}
+          </button>
+          <button onClick={openLog} style={S.btnL}>📜</button>
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          ...S.toast,
+          background: toast.cls === 'ts' ? '#16a34a' : toast.cls === 'te' ? '#dc2626' : '#3b82f6',
+        }}>
+          {toast.msg}
+        </div>
       )}
+
+      {/* Log Modal */}
+      {showLog && (
+        <div style={S.mo} onClick={() => setShowLog(false)}>
+          <div style={S.ms} onClick={e => e.stopPropagation()}>
+            <div style={S.mhBar} />
+            <div style={S.mhd}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800 }}>📜 سجل اليوم</h3>
+              <button onClick={() => setShowLog(false)} style={S.mc}>✕</button>
+            </div>
+            <div style={S.mb}>
+              {!logData ? (
+                <div style={S.empty}>⏳ جاري التحميل...</div>
+              ) : (() => {
+                const entries = logData.entries || {};
+                const stageKeys = Object.keys(entries);
+                const total = stageKeys.reduce((sum, k) => sum + entries[k].length, 0);
+                if (total === 0) return <div style={S.empty}>📭 لا توجد سجلات</div>;
+                return stageKeys.map(st => {
+                  const arr = entries[st];
+                  if (!arr.length) return null;
+                  return (
+                    <div key={st}>
+                      <div style={S.lsh}>🔷 {st} ({arr.length})</div>
+                      {arr.map((e, i) => (
+                        <div key={i} style={S.li}>
+                          <span style={S.ln}>{e.name}</span>
+                          <span style={{
+                            ...S.lt,
+                            background: e.type === 'استئذان' ? '#3b82f6' : '#ea580c'
+                          }}>
+                            {e.type} {e.time}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
-};
-
-// ── Helper ──
-function shortenName(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length <= 2) return name;
-  return `${parts[0]} ${parts[parts.length - 1]}`;
 }
 
-// ── Styles ──
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    direction: 'rtl', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", maxWidth: '500px',
-    margin: '0 auto', minHeight: '100vh', background: '#f0f2f5',
-    paddingBottom: '70px',
-  },
-  header: {
-    color: '#fff', padding: '16px 20px', textAlign: 'center',
-  },
-  content: {
-    padding: '16px',
-  },
-  center: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    minHeight: '100vh', direction: 'rtl' as const, fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif",
-  },
-  select: {
-    flex: 1, padding: '8px 12px', border: '2px solid #e5e7eb',
-    borderRadius: '12px', fontSize: '13px', minWidth: '90px',
-  },
-  overlay: {
-    position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)',
-    backdropFilter: 'blur(4px)',
-    display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000,
-  },
-  modal: {
-    background: '#fff', borderRadius: '20px 20px 0 0', padding: '20px',
-    width: '100%', maxWidth: '500px', maxHeight: '70vh', overflowY: 'auto' as const,
-  },
-};
+function shortenName(n: string): string {
+  const p = n.trim().split(/\s+/);
+  return p.length <= 2 ? n : `${p[0]} ${p[p.length - 1]}`;
+}
 
-export default StaffFormPage;
+// ★ Styles matching original StaffInputForm.html
+const S: Record<string, React.CSSProperties> = {
+  page: { direction: 'rtl', fontFamily: "'Segoe UI','Tahoma','Arial',sans-serif", background: '#f0f2f5', minHeight: '100vh', color: '#1f2937' },
+  center: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', direction: 'rtl' as const },
+  loadingText: { fontSize: '18px', color: '#6b7280' },
+  errScr: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', textAlign: 'center' as const, padding: '32px' },
+  header: { padding: '16px 20px', position: 'sticky' as const, top: 0, zIndex: 40, boxShadow: '0 2px 12px rgba(30,64,175,.3)' },
+  hdrRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '600px', margin: '0 auto' },
+  hdrTitle: { fontSize: '20px', fontWeight: 800, color: '#fff', margin: 0 },
+  hdrSub: { fontSize: '12px', color: 'rgba(255,255,255,.8)', marginTop: '2px' },
+  hdrBtn: { width: '42px', height: '42px', borderRadius: '12px', border: 'none', background: 'rgba(255,255,255,.15)', color: '#fff', fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  tabs: { display: 'flex', background: '#fff', margin: '16px 16px 0', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,.06)', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto' },
+  tab: { flex: 1, padding: '14px', textAlign: 'center' as const, fontSize: '15px', fontWeight: 700, border: 'none', background: '#fff', color: '#6b7280', cursor: 'pointer', transition: 'all .25s' },
+  main: { maxWidth: '600px', margin: '0 auto', padding: '16px 16px 120px' },
+  card: { background: '#fff', borderRadius: '16px', padding: '18px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(0,0,0,.05)', border: '2px solid transparent' },
+  cardTitle: { fontSize: '14px', fontWeight: 700, color: '#374151', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' },
+  fr: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' },
+  fl: { fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' },
+  sel: { width: '100%', padding: '12px 14px', border: '2px solid #e5e7eb', borderRadius: '12px', fontSize: '15px', fontFamily: 'inherit', background: '#fff', color: '#1f2937', appearance: 'none' as const },
+  sb: { width: '100%', padding: '10px 14px', border: '2px solid #e5e7eb', borderRadius: '12px', fontSize: '14px', fontFamily: 'inherit', marginBottom: '10px', boxSizing: 'border-box' as const },
+  sl: { maxHeight: '350px', overflowY: 'auto' as const, border: '2px solid #e5e7eb', borderRadius: '12px' },
+  si: { display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', userSelect: 'none' as const },
+  ck: { width: '22px', height: '22px', borderRadius: '6px', border: '2px solid #d1d5db', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', transition: 'all .15s' },
+  sn: { fontSize: '15px', fontWeight: 600, color: '#1f2937', flex: 1 },
+  ct: { fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '8px', background: '#f3f4f6', color: '#6b7280', flexShrink: 0 },
+  sa: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#f9fafb', borderBottom: '2px solid #e5e7eb', cursor: 'pointer', userSelect: 'none' as const },
+  sat: { fontSize: '13px', fontWeight: 700, color: '#6b7280' },
+  badge: { fontSize: '12px', fontWeight: 800, padding: '2px 10px', borderRadius: '100px', color: '#fff' },
+  chips: { display: 'flex', flexWrap: 'wrap' as const, gap: '6px', marginTop: '10px' },
+  chip: { display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '100px', fontSize: '12px', fontWeight: 700, color: '#fff' },
+  chipC: { opacity: 0.75, fontSize: '10px' },
+  chipX: { cursor: 'pointer', fontSize: '14px', opacity: 0.8 },
+  empty: { textAlign: 'center' as const, padding: '40px 20px', color: '#9ca3af', fontSize: '15px' },
+  bbar: { position: 'fixed' as const, bottom: 0, left: 0, right: 0, padding: '14px 16px', background: '#fff', borderTop: '1px solid #e5e7eb', zIndex: 30, boxShadow: '0 -4px 12px rgba(0,0,0,.06)' },
+  bbarIn: { maxWidth: '600px', margin: '0 auto', display: 'flex', gap: '10px' },
+  btnS: { flex: 1, padding: '16px', border: 'none', borderRadius: '14px', color: '#fff', fontSize: '17px', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,0,0,.15)' },
+  btnL: { width: '56px', height: '56px', borderRadius: '14px', border: '2px solid #e5e7eb', background: '#fff', color: '#6b7280', fontSize: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  toast: { position: 'fixed' as const, top: '80px', left: '50%', transform: 'translateX(-50%)', padding: '14px 24px', borderRadius: '14px', color: '#fff', fontSize: '15px', fontWeight: 700, zIndex: 60, textAlign: 'center' as const, minWidth: '200px', boxShadow: '0 8px 24px rgba(0,0,0,.2)' },
+  mo: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(4px)' },
+  ms: { background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' as const },
+  mhBar: { width: '40px', height: '4px', background: '#d1d5db', borderRadius: '100px', margin: '10px auto' },
+  mhd: { padding: '0 20px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  mc: { width: '36px', height: '36px', borderRadius: '50%', border: 'none', background: '#f3f4f6', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  mb: { flex: 1, overflowY: 'auto' as const, padding: '16px 20px' },
+  lsh: { fontSize: '14px', fontWeight: 800, color: '#6b7280', padding: '8px 12px', background: '#f3f4f6', borderRadius: '10px', margin: '12px 0 8px', textAlign: 'center' as const },
+  li: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f3f4f6' },
+  ln: { fontSize: '14px', fontWeight: 700 },
+  lt: { fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '100px', color: '#fff' },
+};

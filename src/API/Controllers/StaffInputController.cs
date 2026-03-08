@@ -35,6 +35,25 @@ public class StaffInputController : ControllerBase
         var isGuard = user.Role == UserRole.Guard;
         var permissions = GetStaffPermissions(user.Role);
 
+        // ★ gradeMap: مطابق للأصلي — كل مرحلة → قائمة أسماء الصفوف
+        var stageConfigs = await _db.StageConfigs
+            .Include(sc => sc.Grades)
+            .Where(sc => sc.IsEnabled)
+            .ToListAsync();
+
+        var gradeMap = new Dictionary<string, List<string>>();
+        var enabledStages = new List<string>();
+        foreach (var sc in stageConfigs)
+        {
+            var stageArabic = sc.Stage.ToArabic();
+            enabledStages.Add(stageArabic);
+            gradeMap[stageArabic] = sc.Grades
+                .Where(g => g.IsEnabled && g.ClassCount > 0)
+                .OrderBy(g => g.Id)
+                .Select(g => g.GradeName)
+                .ToList();
+        }
+
         return Ok(ApiResponse<object>.Ok(new
         {
             success = true,
@@ -46,7 +65,10 @@ public class StaffInputController : ControllerBase
                 role,
                 permissions,
                 isGuard
-            }
+            },
+            gradeMap,
+            enabledStages,
+            token
         }));
     }
 
@@ -160,6 +182,12 @@ public class StaffInputController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // ★ تسجيل النشاط — مطابق لـ logStaffActivity_ الأصلي
+        await LogStaffActivity(user.Name, "استئذان",
+            string.Join(", ", students.Select(s => $"{s.Grade} {s.Class}").Distinct()),
+            saved, students.FirstOrDefault()?.Stage.ToArabic() ?? "");
+
         return Ok(ApiResponse<object>.Ok(new
         {
             success = true,
@@ -212,6 +240,12 @@ public class StaffInputController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // ★ تسجيل النشاط
+        await LogStaffActivity(user.Name, "تأخر",
+            string.Join(", ", students.Select(s => $"{s.Grade} {s.Class}").Distinct()),
+            saved, students.FirstOrDefault()?.Stage.ToArabic() ?? "");
+
         return Ok(ApiResponse<object>.Ok(new
         {
             success = true,
@@ -288,7 +322,7 @@ public class StaffInputController : ControllerBase
         }));
     }
 
-    // ── 7. Get today's staff entries (for daily log modal) ──
+    // ── 7. Get today's staff entries (for daily log modal) — مجمّع حسب المرحلة مطابق للأصلي ──
     [HttpGet("public/today-entries")]
     public async Task<ActionResult<ApiResponse<object>>> GetTodayEntries([FromQuery] string token)
     {
@@ -303,45 +337,36 @@ public class StaffInputController : ControllerBase
 
         var today = DateTime.UtcNow.Date;
 
+        // ★ تجميع حسب المرحلة — مطابق للأصلي
+        var grouped = new Dictionary<string, List<object>>();
+
         var permissions = await _db.PermissionRecords
             .Where(r => r.RecordedAt >= today)
             .OrderByDescending(r => r.RecordedAt)
-            .Select(r => new
-            {
-                type = "permission",
-                r.StudentName,
-                r.Grade,
-                className = r.Class,
-                stage = r.Stage.ToString(),
-                r.Reason,
-                r.ExitTime,
-                r.RecordedBy,
-                time = r.RecordedAt
-            })
+            .Select(r => new { r.StudentName, r.ExitTime, r.Stage })
             .ToListAsync();
+
+        foreach (var r in permissions)
+        {
+            var stageArabic = r.Stage.ToArabic();
+            if (!grouped.ContainsKey(stageArabic)) grouped[stageArabic] = new List<object>();
+            grouped[stageArabic].Add(new { name = r.StudentName, type = "استئذان", time = r.ExitTime ?? "" });
+        }
 
         var tardiness = await _db.TardinessRecords
             .Where(r => r.RecordedAt >= today)
             .OrderByDescending(r => r.RecordedAt)
-            .Select(r => new
-            {
-                type = "tardiness",
-                r.StudentName,
-                r.Grade,
-                className = r.Class,
-                stage = r.Stage.ToString(),
-                reason = "",
-                exitTime = "",
-                r.RecordedBy,
-                time = r.RecordedAt
-            })
+            .Select(r => new { r.StudentName, r.Stage })
             .ToListAsync();
 
-        return Ok(ApiResponse<object>.Ok(new
+        foreach (var r in tardiness)
         {
-            permissions = permissions.Cast<object>().ToList(),
-            tardiness = tardiness.Cast<object>().ToList()
-        }));
+            var stageArabic = r.Stage.ToArabic();
+            if (!grouped.ContainsKey(stageArabic)) grouped[stageArabic] = new List<object>();
+            grouped[stageArabic].Add(new { name = r.StudentName, type = "تأخر", time = "" });
+        }
+
+        return Ok(ApiResponse<object>.Ok(new { entries = grouped }));
     }
 
     // ── Helpers ──
@@ -364,6 +389,27 @@ public class StaffInputController : ControllerBase
             return $"{cal.GetYear(now)}/{cal.GetMonth(now):D2}/{cal.GetDayOfMonth(now):D2}";
         }
         catch { return ""; }
+    }
+
+    // ★ تسجيل نشاط الموظف — مطابق لـ logStaffActivity_ سطر 535-558
+    private async Task LogStaffActivity(string staffName, string type, string className, int count, string stage)
+    {
+        try
+        {
+            _db.AuditLogs.Add(new AuditLog
+            {
+                Date = DateTime.Now.ToString("yyyy/MM/dd"),
+                Time = DateTime.Now.ToString("HH:mm"),
+                UserName = staffName,
+                ActionType = type,
+                Details = "الفصل: " + className,
+                Count = count,
+                Stage = stage,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch { /* silent — same as original */ }
     }
 
 }
