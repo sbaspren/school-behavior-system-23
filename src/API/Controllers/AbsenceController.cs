@@ -589,19 +589,54 @@ public class AbsenceController : ControllerBase
 
         foreach (var s in request.Students)
         {
-            // Match by studentNumber first, then by name
+            // Match by studentNumber first, then by name (5 attempts — matching original GAS logic)
             Student? student = null;
+
+            // ★ المحاولة 1: بالرقم (رقم الهوية)
             if (!string.IsNullOrEmpty(s.StudentNumber))
                 student = await _db.Students.FirstOrDefaultAsync(st => st.StudentNumber == s.StudentNumber);
 
             if (student == null && !string.IsNullOrEmpty(s.Name))
             {
-                var normalName = NormalizeArabicName(s.Name);
-                var firstName = s.Name.Split(' ')[0];
-                var candidates = await _db.Students
-                    .Where(st => st.Name.Contains(firstName))
-                    .ToListAsync();
-                student = candidates.FirstOrDefault(c => NormalizeArabicName(c.Name) == normalName);
+                var cleanName = s.Name.Trim();
+
+                // ★ المحاولة 2: تطابق كامل بعد تنظيف المسافات
+                student = await _db.Students.FirstOrDefaultAsync(st => st.Name == cleanName);
+
+                // ★ المحاولة 3: بدون "بن" / "ابن"
+                if (student == null)
+                {
+                    var noBenName = cleanName.Replace(" بن ", " ").Replace(" ابن ", " ");
+                    student = await _db.Students.FirstOrDefaultAsync(st => 
+                        st.Name.Replace(" بن ", " ").Replace(" ابن ", " ") == noBenName);
+                }
+
+                // ★ المحاولة 4: بدون تشكيل + تطبيع الألف والهمزة
+                if (student == null)
+                {
+                    var normalName = NormalizeArabicName(cleanName);
+                    var firstName = cleanName.Split(' ')[0];
+                    var candidates = await _db.Students
+                        .Where(st => st.Name.Contains(firstName))
+                        .ToListAsync();
+                    student = candidates.FirstOrDefault(c => NormalizeArabicName(c.Name) == normalName);
+                }
+
+                // ★ المحاولة 5: الاسم الأول + الأخير (تطابق جزئي — فقط لو نتيجة وحيدة)
+                if (student == null)
+                {
+                    var parts = cleanName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 2)
+                    {
+                        var first = parts[0];
+                        var last = parts[^1];
+                        var matches = await _db.Students
+                            .Where(st => st.Name.StartsWith(first) && st.Name.EndsWith(last))
+                            .ToListAsync();
+                        if (matches.Count == 1)
+                            student = matches[0];
+                    }
+                }
             }
 
             if (student == null) { skipped++; continue; }
@@ -909,7 +944,7 @@ public class AbsenceController : ControllerBase
 
             // Build excuse link — frontend route for parent form
             var baseUrl = $"{Request.Scheme}://{Request.Host}";
-            var excuseLink = $"{baseUrl}/parent-excuse?token={code}";
+            var excuseLink = $"{baseUrl}/parent-excuse-form?token={code}";
 
             sb.AppendLine();
             sb.AppendLine();

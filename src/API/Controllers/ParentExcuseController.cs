@@ -59,6 +59,29 @@ public class ParentExcuseController : ControllerBase
         excuse.SchoolNotes = request.Notes ?? "";
         await _db.SaveChangesAsync();
 
+        // ★ إرسال رسالة تلقائية لولي الأمر عند القبول/الرفض
+        if (request.SendMessage)
+        {
+            var student = await _db.Students.FirstOrDefaultAsync(s => s.Id == excuse.StudentId);
+            if (student != null && !string.IsNullOrEmpty(student.Mobile))
+            {
+                var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+                var session = await _db.WhatsAppSessions
+                    .Where(s => s.IsPrimary && s.Stage == excuse.Stage.ToString())
+                    .FirstOrDefaultAsync();
+                session ??= await _db.WhatsAppSessions.Where(s => s.IsPrimary).FirstOrDefaultAsync();
+
+                if (settings != null && session != null)
+                {
+                    var msg = request.Status == "مقبول"
+                        ? $"نفيدكم بأنه تم قبول عذر غياب ابنكم *{excuse.StudentName}*. شكراً لتواصلكم مع المدرسة."
+                        : $"نفيدكم بأنه تم رفض عذر غياب ابنكم *{excuse.StudentName}*.{(string.IsNullOrEmpty(request.Notes) ? "" : $" السبب: {request.Notes}")} للاستفسار يرجى التواصل مع إدارة المدرسة.";
+
+                    await _wa.SendMessageAsync(settings.ServerUrl, session.PhoneNumber, student.Mobile, msg);
+                }
+            }
+        }
+
         return Ok(ApiResponse<object>.Ok(new { message = "تم تحديث حالة العذر" }));
     }
 
@@ -306,6 +329,7 @@ public class UpdateExcuseStatusRequest
 {
     public string Status { get; set; } = "";     // مقبول / مرفوض
     public string? Notes { get; set; }
+    public bool SendMessage { get; set; }        // إرسال رسالة لولي الأمر
 }
 
 public class SubmitExcuseRequest
