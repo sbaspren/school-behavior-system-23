@@ -22,6 +22,7 @@ const LinksTab: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCreating, setBulkCreating] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [linkCopyModal, setLinkCopyModal] = useState<{ name: string; url: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     title: string; message: string; color: string; onConfirm: () => void;
   } | null>(null);
@@ -123,8 +124,14 @@ const LinksTab: React.FC = () => {
       const api = person.type === 'teacher' ? teachersApi : usersApi;
       const res = await api.createLink(person.id);
       if (res.data?.success) {
+        const tokenLink = res.data.data?.tokenLink;
         showSuccess(`تم إنشاء رابط ${person.name}`);
         loadData();
+        // ★ عرض الرابط للنسخ — مطابق لـ showLinkCopyModal في الأصلي
+        if (tokenLink) {
+          const url = `${window.location.origin}/form/${tokenLink}`;
+          setLinkCopyModal({ name: person.name, url });
+        }
       } else showError(res.data?.message || 'خطأ');
     } catch { showError('خطأ في الاتصال'); }
   };
@@ -357,6 +364,46 @@ const LinksTab: React.FC = () => {
           <p style={{ fontSize: '48px' }}>🔗</p>
           <p style={{ fontSize: '18px', fontWeight: 500 }}>لا توجد نتائج</p>
           <p style={{ fontSize: '14px' }}>أضف أعضاء في الهيئة الإدارية أو المعلمين أولاً</p>
+        </div>
+      )}
+
+      {/* ★ نافذة نسخ الرابط — مطابق لـ showLinkCopyModal في JS_Settings.html سطر 3264 */}
+      {linkCopyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '480px', padding: '32px', textAlign: 'center' }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔗</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700, color: '#1f2937' }}>
+              رابط {linkCopyModal.name}
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#6b7280' }}>
+              انسخ الرابط أو أرسله عبر واتساب
+            </p>
+            <div dir="ltr" style={{
+              background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px',
+              padding: '12px 16px', fontSize: '13px', color: '#374151', wordBreak: 'break-all',
+              marginBottom: '20px', textAlign: 'left',
+            }}>
+              {linkCopyModal.url}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <button onClick={() => {
+                navigator.clipboard.writeText(linkCopyModal.url);
+                showSuccess('تم نسخ الرابط');
+              }} style={{
+                padding: '10px 28px', background: '#4f46e5', color: '#fff',
+                borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
+                fontSize: '15px',
+              }}>
+                📋 نسخ الرابط
+              </button>
+              <button onClick={() => setLinkCopyModal(null)} style={{
+                padding: '10px 20px', background: '#f3f4f6', color: '#374151',
+                borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
+              }}>
+                إغلاق
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

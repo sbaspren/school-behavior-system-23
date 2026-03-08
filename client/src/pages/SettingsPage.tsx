@@ -408,6 +408,7 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
     return buildInitialStages();
   });
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ removedStages: string[]; message: string } | null>(null);
 
   // When secondary system changes, update secondary grade list
   useEffect(() => {
@@ -460,14 +461,27 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
     );
   };
 
-  const handleSave = async () => {
+  const doSave = async (confirmedDeletion = false) => {
     if (saving) return;
     setSaving(true);
     try {
-      const payload: StructureData = { schoolType, secondarySystem, stages };
+      const payload: StructureData & { confirmedDeletion?: boolean } = { schoolType, secondarySystem, stages, confirmedDeletion };
       const res = await settingsApi.saveStructure(payload);
+      const resData = res.data?.data;
+
+      // إذا السيرفر يطلب تأكيد حذف مراحل (مطابق لـ saveSchoolStructure سطر 235-253)
+      if (resData?.needsConfirmation) {
+        setDeleteConfirm({
+          removedStages: resData.removedStages || [],
+          message: resData.message || 'سيتم حذف بيانات المراحل المُلغاة. هل أنت متأكد؟',
+        });
+        setSaving(false);
+        return;
+      }
+
       if (res.data?.success) {
         showSuccess('تم حفظ الهيكل بنجاح');
+        setDeleteConfirm(null);
         onSaved();
       } else {
         showError(res.data?.message || 'خطأ في الحفظ');
@@ -478,6 +492,9 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
       setSaving(false);
     }
   };
+
+  const handleSave = () => doSave(false);
+  const handleConfirmedSave = () => doSave(true);
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -584,6 +601,66 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
           💾 {saving ? 'جاري الحفظ...' : 'حفظ الهيكل'}
         </button>
       </div>
+
+      {/* ★ نافذة تأكيد حذف المراحل — مطابق لـ showDeleteConfirmationModal في JS_Settings.html سطر 904 */}
+      {deleteConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '20px', padding: '32px',
+            maxWidth: '500px', width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+              <span style={{ fontSize: '32px' }}>⚠️</span>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#dc2626' }}>تأكيد حذف مراحل</h3>
+            </div>
+
+            <p style={{ fontSize: '15px', color: '#374151', lineHeight: 1.8, marginBottom: '16px' }}>
+              {deleteConfirm.message}
+            </p>
+
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px',
+              padding: '16px', marginBottom: '24px',
+            }}>
+              <p style={{ fontSize: '14px', fontWeight: 700, color: '#991b1b', margin: '0 0 8px' }}>
+                المراحل التي ستُحذف بياناتها:
+              </p>
+              {deleteConfirm.removedStages.map((stage) => (
+                <div key={stage} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0',
+                }}>
+                  <span style={{ color: '#dc2626' }}>🗑️</span>
+                  <span style={{ fontWeight: 700, color: '#991b1b' }}>{stage}</span>
+                  <span style={{ fontSize: '12px', color: '#b91c1c' }}>(طلاب + سجلات مخالفات + غياب + ...)</span>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ fontSize: '13px', color: '#dc2626', fontWeight: 700, marginBottom: '20px' }}>
+              ⛔ هذا الإجراء لا يمكن التراجع عنه!
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{
+                padding: '10px 24px', background: '#f3f4f6', color: '#374151',
+                borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
+              }}>
+                إلغاء
+              </button>
+              <button onClick={handleConfirmedSave} disabled={saving} style={{
+                padding: '10px 24px', background: '#dc2626', color: '#fff',
+                borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
+                opacity: saving ? 0.7 : 1,
+              }}>
+                {saving ? 'جاري الحذف...' : '🗑️ تأكيد الحذف والحفظ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

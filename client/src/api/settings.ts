@@ -41,7 +41,7 @@ export const settingsApi = {
   getSettings: () => api.get('/settings'),
   saveSettings: (data: SchoolSettingsData) => api.post('/settings', data),
   getStructure: () => api.get('/settings/structure'),
-  saveStructure: (data: StructureData) => api.post('/settings/structure', data),
+  saveStructure: (data: StructureData & { confirmedDeletion?: boolean }) => api.post('/settings/structure', data),
   isConfigured: () => api.get('/settings/is-configured'),
   getStages: () => api.get('/settings/stages'),
 };

@@ -84,6 +84,7 @@ public class TeachersController : ControllerBase
         return Ok(ApiResponse.Ok("تم تحديث المعلم بنجاح"));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id}")]
     public async Task<ActionResult<ApiResponse>> DeleteTeacher(int id)
     {
