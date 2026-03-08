@@ -136,17 +136,15 @@ public class WhatsAppServerService : IWhatsAppServerService
 
         try
         {
-            var payload = new
-            {
-                sender = CleanPhone(senderPhone),
-                phone = CleanPhone(recipientPhone),
-                message
-            };
+            // ★ مطابق GAS سطر 1099: POST /send/{cleanSender} مع { phone, message }
+            var cleanSender    = CleanPhone(senderPhone);
+            var cleanRecipient = CleanPhone(recipientPhone);
 
-            var json = JsonSerializer.Serialize(payload);
+            var payload = new { phone = cleanRecipient, message };
+            var json    = JsonSerializer.Serialize(payload);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _http.PostAsync($"{serverUrl.TrimEnd('/')}/send-message", content);
+            var response = await _http.PostAsync($"{serverUrl.TrimEnd('/')}/send/{cleanSender}", content);
             return response.IsSuccessStatusCode;
         }
         catch

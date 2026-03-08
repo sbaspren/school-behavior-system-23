@@ -73,42 +73,90 @@ public class WhatsAppController : ControllerBase
     [HttpGet("status")]
     public async Task<ActionResult<ApiResponse<object>>> GetStatus([FromQuery] string? stage = null)
     {
-        var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var settings       = await _db.WhatsAppSettings.FirstOrDefaultAsync();
         var schoolSettings = await _db.SchoolSettings.FirstOrDefaultAsync();
-        var serverUrl = settings?.ServerUrl ?? "";
+        var serverUrl      = settings?.ServerUrl ?? "";
 
-        var needSetup = string.IsNullOrEmpty(settings?.SecurityCode);
+        // ★ 1. التحقق من إعداد رمز الأمان — مطابق GAS سطر 982
+        var needSetup    = string.IsNullOrEmpty(settings?.SecurityCode);
         var whatsAppMode = schoolSettings?.WhatsAppMode.ToString() ?? "PerStage";
 
-        // effectiveStage: في وضع Unified، المرحلة لا تؤثر
+        // ★ 2. النمط الموحد: effectiveStage = "" — مطابق GAS سطر 994
         var effectiveStage = whatsAppMode == "Unified" ? "" : (stage ?? "");
 
         if (string.IsNullOrEmpty(serverUrl))
             return Ok(ApiResponse<object>.Ok(new
             {
-                isOnline = false, needSetup, whatsAppMode, effectiveStage,
-                error = "رابط السيرفر غير مُعيّن"
+                connected = false, phone = (string?)null, needSetup,
+                whatsappMode = whatsAppMode, stage = stage ?? "", effectiveStage,
+                sessions = Array.Empty<object>(),
+                error = "رابط سيرفر الواتساب غير مُعيّن — عيّنه في إعدادات الواتساب"
             }));
 
-        var status = await _waServer.GetStatusAsync(serverUrl);
+        // ★ 3. جلب الأرقام المتصلة من السيرفر — مطابق GAS سطر 997 (getConnectedSessionsByStage)
+        var serverStatus   = await _waServer.GetStatusAsync(serverUrl);
+        var serverPhones   = serverStatus.ConnectedPhones.Select(p => p.PhoneNumber).ToList();
 
-        // جلب جلسات المرحلة أو الكل
-        var sessionsQ = _db.WhatsAppSessions.AsQueryable();
+        // جلب الجلسات المحفوظة للمرحلة
+        var savedQ = _db.WhatsAppSessions.AsQueryable();
         if (!string.IsNullOrEmpty(effectiveStage))
-            sessionsQ = sessionsQ.Where(s => s.Stage == effectiveStage);
+            savedQ = savedQ.Where(s => s.Stage == effectiveStage);
+        var savedSessions = await savedQ.ToListAsync();
 
-        var savedSessions = await sessionsQ.ToListAsync();
-        var hasPrimary = savedSessions.Any(s => s.IsPrimary);
+        // بناء allSessions (كل المحفوظة مع حالة الاتصال) — مطابق GAS allSessions
+        var allSessions = savedSessions.Select(s => new
+        {
+            phone       = s.PhoneNumber,
+            stage       = s.Stage,
+            userType    = s.UserType,
+            status      = serverPhones.Contains(s.PhoneNumber) ? "متصل" : "غير متصل",
+            linkedDate  = s.LinkedAt?.ToString("yyyy/MM/dd HH:mm") ?? "",
+            lastUsed    = s.LastUsed?.ToString("yyyy/MM/dd HH:mm") ?? "",
+            messageCount = s.MessageCount,
+            isPrimary   = s.IsPrimary,
+        }).ToList();
 
+        // sessions = المتصلون فقط — مطابق GAS sessions
+        var connectedSessions = allSessions.Where(s => s.status == "متصل").Cast<object>().ToList();
+
+        // ★ 4. جلب الرقم الرئيسي — مطابق GAS سطر 1001 (getPrimaryPhoneForStage)
+        var primaryRow = savedSessions.FirstOrDefault(s => s.IsPrimary);
+        var primaryPhone = primaryRow?.PhoneNumber;
+        var hasPrimary   = primaryPhone != null;
+
+        if (connectedSessions.Count > 0)
+        {
+            // ★ مطابق GAS سطر 1005: connected = true
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                connected    = true,
+                phone        = primaryPhone ?? connectedSessions.Cast<dynamic>().First().phone,
+                primaryPhone,
+                hasPrimary,
+                needSetup,
+                sessions     = connectedSessions,
+                allSessions  = allSessions.Cast<object>().ToList(),
+                stage        = stage ?? "",
+                effectiveStage,
+                whatsappMode = whatsAppMode,
+                connectedPhones = serverStatus.ConnectedPhones.Select(p => new { p.PhoneNumber, p.IsConnected }),
+            }));
+        }
+
+        // ★ مطابق GAS سطر 1023: لا أرقام متصلة
         return Ok(ApiResponse<object>.Ok(new
         {
-            status.IsOnline, needSetup, whatsAppMode, effectiveStage, hasPrimary,
-            connectedPhones = status.ConnectedPhones.Select(p => new { p.PhoneNumber, p.IsConnected }),
-            allSessions = savedSessions.Select(s => new
-            {
-                s.Id, s.PhoneNumber, s.Stage, s.UserType,
-                s.ConnectionStatus, s.IsPrimary, s.MessageCount
-            }),
+            connected    = false,
+            phone        = (string?)null,
+            primaryPhone,
+            hasPrimary,
+            needSetup,
+            sessions     = Array.Empty<object>(),
+            allSessions  = allSessions.Cast<object>().ToList(),
+            stage        = stage ?? "",
+            effectiveStage,
+            whatsappMode = whatsAppMode,
+            connectedPhones = serverStatus.ConnectedPhones.Select(p => new { p.PhoneNumber, p.IsConnected }),
         }));
     }
 
@@ -169,48 +217,59 @@ public class WhatsAppController : ControllerBase
     }
 
     // ===== Send Message =====
+    // ★ مطابق لـ sendWhatsAppMessage + sendWhatsAppMessageFrom في GAS
 
     [HttpPost("send")]
     public async Task<ActionResult<ApiResponse<object>>> SendMessage([FromBody] SendWhatsAppRequest request)
     {
         if (string.IsNullOrEmpty(request.RecipientPhone))
-            return BadRequest(ApiResponse<object>.Fail("\u0631\u0642\u0645 \u0627\u0644\u0645\u0633\u062a\u0642\u0628\u0644 \u0645\u0637\u0644\u0648\u0628")); // رقم المستقبل مطلوب
+            return BadRequest(ApiResponse<object>.Fail("رقم المستقبل مطلوب"));
         if (string.IsNullOrEmpty(request.Message))
-            return BadRequest(ApiResponse<object>.Fail("\u0646\u0635 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628")); // نص الرسالة مطلوب
+            return BadRequest(ApiResponse<object>.Fail("نص الرسالة مطلوب"));
 
-        var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var settings  = await _db.WhatsAppSettings.FirstOrDefaultAsync();
         var serverUrl = settings?.ServerUrl ?? "";
 
         if (string.IsNullOrEmpty(serverUrl))
-            return BadRequest(ApiResponse<object>.Fail("\u0631\u0627\u0628\u0637 \u0627\u0644\u0633\u064a\u0631\u0641\u0631 \u063a\u064a\u0631 \u0645\u064f\u0639\u064a\u0651\u0646")); // رابط السيرفر غير مُعيّن
+            return BadRequest(ApiResponse<object>.Fail("رابط سيرفر الواتساب غير مُعيّن"));
 
-        // Get sender phone: use specified or primary for stage
-        var senderPhone = request.SenderPhone;
+        // ★ جلب الرقم المرسل: المحدد → الرئيسي للمرحلة → أول متصل في المرحلة (مطابق GAS)
+        var senderPhone  = request.SenderPhone;
+        var senderUserType = "وكيل";
+
         if (string.IsNullOrEmpty(senderPhone) && !string.IsNullOrEmpty(request.Stage))
         {
             var primary = await _db.WhatsAppSessions
                 .Where(s => s.Stage == request.Stage && s.IsPrimary)
                 .FirstOrDefaultAsync();
-            senderPhone = primary?.PhoneNumber;
+            senderPhone    = primary?.PhoneNumber;
+            senderUserType = primary?.UserType ?? "وكيل";
         }
-        if (string.IsNullOrEmpty(senderPhone))
+
+        // ★ Fallback: أول رقم متصل في المرحلة — مطابق GAS سطر 1120 (getConnectedSessionsByStage)
+        if (string.IsNullOrEmpty(senderPhone) && !string.IsNullOrEmpty(request.Stage))
         {
-            var anyPrimary = await _db.WhatsAppSessions
-                .Where(s => s.IsPrimary)
-                .FirstOrDefaultAsync();
-            senderPhone = anyPrimary?.PhoneNumber;
+            var serverPhones = await _waServer.GetConnectedSessionsAsync(serverUrl);
+            var stageSessions = await _db.WhatsAppSessions
+                .Where(s => s.Stage == request.Stage)
+                .ToListAsync();
+            var firstConnected = stageSessions.FirstOrDefault(s => serverPhones.Contains(s.PhoneNumber));
+            senderPhone    = firstConnected?.PhoneNumber;
+            senderUserType = firstConnected?.UserType ?? "وكيل";
         }
 
         if (string.IsNullOrEmpty(senderPhone))
-            return BadRequest(ApiResponse<object>.Fail("\u0644\u0627 \u064a\u0648\u062c\u062f \u0631\u0642\u0645 \u0645\u0631\u0633\u0644 \u0645\u062d\u062f\u062f")); // لا يوجد رقم مرسل محدد
+            return BadRequest(ApiResponse<object>.Fail(
+                $"لا يوجد رقم رئيسي متصل لمرحلة {request.Stage}. يرجى ربط رقم رئيسي من أدوات واتساب."));
 
         var success = await _waServer.SendMessageAsync(serverUrl, senderPhone, request.RecipientPhone, request.Message);
 
         if (success)
         {
-            // Increment message count
             var session = await _db.WhatsAppSessions
-                .FirstOrDefaultAsync(s => s.PhoneNumber == senderPhone);
+                .Where(s => s.PhoneNumber == senderPhone &&
+                       (string.IsNullOrEmpty(request.Stage) || s.Stage == request.Stage))
+                .FirstOrDefaultAsync();
             if (session != null)
             {
                 session.MessageCount++;
@@ -223,62 +282,46 @@ public class WhatsAppController : ControllerBase
     }
 
     // ===== Send + Log (sendWhatsAppWithLog equivalent) =====
+    // ★ ترتيب العمليات مطابق GAS سطر 1146: سجّل → أرسل → حدّث الحالة
 
     [HttpPost("send-with-log")]
     public async Task<ActionResult<ApiResponse<object>>> SendWithLog([FromBody] SendWithLogRequest request)
     {
         if (string.IsNullOrEmpty(request.Phone))
-            return BadRequest(ApiResponse<object>.Fail("\u0631\u0642\u0645 \u0627\u0644\u062c\u0648\u0627\u0644 \u0645\u0637\u0644\u0648\u0628")); // رقم الجوال مطلوب
+            return BadRequest(ApiResponse<object>.Fail("رقم الجوال مطلوب"));
 
-        var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var settings  = await _db.WhatsAppSettings.FirstOrDefaultAsync();
         var serverUrl = settings?.ServerUrl ?? "";
 
-        // Determine stage enum
         Stage? stageEnum = null;
         if (!string.IsNullOrEmpty(request.Stage) && Enum.TryParse<Stage>(request.Stage, true, out var parsed))
             stageEnum = parsed;
 
-        // Get sender phone
-        string? senderPhone = null;
+        // ★ 1. جلب الرقم الرئيسي للمرحلة — مطابق GAS سطر 1149
+        WhatsAppSession? senderSession = null;
         if (!string.IsNullOrEmpty(request.Stage))
-        {
-            var primary = await _db.WhatsAppSessions
+            senderSession = await _db.WhatsAppSessions
                 .Where(s => s.Stage == request.Stage && s.IsPrimary)
                 .FirstOrDefaultAsync();
-            senderPhone = primary?.PhoneNumber;
-        }
-        if (string.IsNullOrEmpty(senderPhone))
+
+        // بديل: أي رقم متصل في المرحلة — مطابق GAS سطر 1155
+        if (senderSession == null && !string.IsNullOrEmpty(request.Stage))
         {
-            var anyPrimary = await _db.WhatsAppSessions.Where(s => s.IsPrimary).FirstOrDefaultAsync();
-            senderPhone = anyPrimary?.PhoneNumber;
+            var serverPhones = await _waServer.GetConnectedSessionsAsync(serverUrl);
+            var stageSession = await _db.WhatsAppSessions
+                .Where(s => s.Stage == request.Stage)
+                .ToListAsync();
+            senderSession = stageSession.FirstOrDefault(s => serverPhones.Contains(s.PhoneNumber));
         }
 
-        // Try to send
-        var sendSuccess = false;
-        var sendStatus = "\u0641\u0634\u0644"; // فشل
-        var notes = "";
+        if (senderSession == null)
+            return Ok(ApiResponse<object>.Fail(
+                $"لا يوجد رقم رئيسي متصل لمرحلة {request.Stage}. يرجى ربط رقم رئيسي من أدوات واتساب."));
 
-        if (!string.IsNullOrEmpty(serverUrl) && !string.IsNullOrEmpty(senderPhone))
-        {
-            sendSuccess = await _waServer.SendMessageAsync(serverUrl, senderPhone, request.Phone, request.Message ?? "");
-            sendStatus = sendSuccess ? "\u062a\u0645" : "\u0641\u0634\u0644"; // تم / فشل
+        var senderPhone   = senderSession.PhoneNumber;
+        var senderUserType = senderSession.UserType;
 
-            if (sendSuccess)
-            {
-                var session = await _db.WhatsAppSessions.FirstOrDefaultAsync(s => s.PhoneNumber == senderPhone);
-                if (session != null)
-                {
-                    session.MessageCount++;
-                    session.LastUsed = DateTime.Now;
-                }
-            }
-        }
-        else
-        {
-            notes = string.IsNullOrEmpty(serverUrl) ? "\u0631\u0627\u0628\u0637 \u0627\u0644\u0633\u064a\u0631\u0641\u0631 \u063a\u064a\u0631 \u0645\u064f\u0639\u064a\u0651\u0646" : "\u0644\u0627 \u064a\u0648\u062c\u062f \u0631\u0642\u0645 \u0645\u0631\u0633\u0644";
-        }
-
-        // Log to communication
+        // ★ 2. تسجيل الرسالة أولاً بحالة "جاري الإرسال" — مطابق GAS سطر 1163 (logCommunication)
         var now = DateTime.Now;
         var hijriDate = "";
         try
@@ -290,32 +333,49 @@ public class WhatsAppController : ControllerBase
 
         var log = new CommunicationLog
         {
-            HijriDate = hijriDate,
-            MiladiDate = now.ToString("yyyy/MM/dd"),
-            Time = now.ToString("HH:mm"),
-            StudentId = request.StudentId,
+            HijriDate     = hijriDate,
+            MiladiDate    = now.ToString("yyyy/MM/dd"),
+            Time          = now.ToString("HH:mm"),
+            StudentId     = request.StudentId,
             StudentNumber = request.StudentNumber ?? "",
-            StudentName = request.StudentName ?? "",
-            Grade = request.Grade ?? "",
-            Class = request.ClassName ?? "",
-            Stage = stageEnum ?? Stage.Intermediate,
-            Mobile = request.Phone ?? "",
-            MessageType = request.MessageType ?? "\u0648\u0627\u062a\u0633\u0627\u0628", // واتساب
-            MessageTitle = request.MessageTitle ?? "",
-            MessageBody = request.Message ?? "",
-            SendStatus = sendStatus,
-            SentBy = request.Sender ?? "",
-            Notes = notes,
+            StudentName   = request.StudentName ?? "",
+            Grade         = request.Grade ?? "",
+            Class         = request.ClassName ?? "",
+            Stage         = stageEnum ?? Stage.Intermediate,
+            Mobile        = request.Phone ?? "",
+            MessageType   = request.MessageType ?? "واتساب",
+            MessageTitle  = request.MessageTitle ?? "",
+            MessageBody   = request.Message ?? "",
+            SendStatus    = "جاري الإرسال",
+            SentBy        = request.Sender ?? "الوكيل",
+            Notes         = "",
         };
 
         _db.CommunicationLogs.Add(log);
         await _db.SaveChangesAsync();
 
+        // ★ 3. إرسال الرسالة — مطابق GAS سطر 1184 (sendWhatsAppMessageFrom)
+        var sendSuccess = await _waServer.SendMessageAsync(serverUrl, senderPhone, request.Phone!, request.Message ?? "");
+
+        // ★ 4. تحديث حالة التسجيل + عداد الرسائل — مطابق GAS سطر 1188
+        if (sendSuccess)
+        {
+            log.SendStatus = "✅ تم الإرسال";
+            senderSession.MessageCount++;
+            senderSession.LastUsed = DateTime.Now;
+        }
+        else
+        {
+            log.SendStatus = "❌ فشل";
+            log.Notes      = "فشل الإرسال";
+        }
+        await _db.SaveChangesAsync();
+
         return Ok(ApiResponse<object>.Ok(new
         {
             success = sendSuccess,
-            logId = log.Id,
-            status = sendStatus,
+            logId   = log.Id,
+            status  = log.SendStatus,
         }));
     }
 
@@ -349,34 +409,64 @@ public class WhatsAppController : ControllerBase
     public async Task<ActionResult<ApiResponse<object>>> AddSession([FromBody] AddSessionRequest request)
     {
         if (string.IsNullOrEmpty(request.PhoneNumber))
-            return BadRequest(ApiResponse.Fail("\u0631\u0642\u0645 \u0627\u0644\u0648\u0627\u062a\u0633\u0627\u0628 \u0645\u0637\u0644\u0648\u0628")); // رقم الواتساب مطلوب
+            return BadRequest(ApiResponse.Fail("رقم الواتساب مطلوب"));
 
-        // Check for duplicate
-        var exists = await _db.WhatsAppSessions.AnyAsync(s =>
-            s.PhoneNumber == request.PhoneNumber && s.Stage == (request.Stage ?? "") && s.UserType == (request.UserType ?? ""));
-        if (exists)
-            return BadRequest(ApiResponse.Fail("\u0647\u0630\u0627 \u0627\u0644\u0631\u0642\u0645 \u0645\u0633\u062c\u0644 \u0645\u0633\u0628\u0642\u0627\u064b")); // هذا الرقم مسجل مسبقاً
+        var schoolSettings = await _db.SchoolSettings.FirstOrDefaultAsync();
+        var whatsAppMode   = schoolSettings?.WhatsAppMode.ToString() ?? "PerStage";
+        // ★ في النمط الموحد: المرحلة تكون "" (الكل) — مطابق GAS سطر 511
+        var effectiveStage = whatsAppMode == "Unified" ? "" : (request.Stage ?? "");
+        var cleanPhone     = CleanPhoneNumber(request.PhoneNumber);
 
-        // Clear primary for this stage if setting as primary
-        var sessionsForStage = await _db.WhatsAppSessions
-            .Where(s => s.Stage == (request.Stage ?? ""))
+        // ★ جلب جميع جلسات المرحلة لإزالة الرئيسي القديم لاحقاً
+        var stageSessions = await _db.WhatsAppSessions
+            .Where(s => s.Stage == effectiveStage)
             .ToListAsync();
-        foreach (var s in sessionsForStage) s.IsPrimary = false;
 
+        // ★ التحقق من وجود الرقم مسبقاً — إذا موجود نُحدّثه (مطابق GAS سطر 517-527)
+        var existing = stageSessions.FirstOrDefault(s =>
+            CleanPhoneNumber(s.PhoneNumber) == cleanPhone &&
+            s.UserType == (request.UserType ?? ""));
+
+        if (existing != null)
+        {
+            // تحديث الرقم الموجود وجعله رئيسياً
+            foreach (var s in stageSessions) s.IsPrimary = false;
+            existing.ConnectionStatus = "متصل";
+            existing.LastUsed         = DateTime.Now;
+            existing.IsPrimary        = true;
+            await _db.SaveChangesAsync();
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                id        = existing.Id,
+                message   = "تم تحديث الرقم وتعيينه كرئيسي",
+                isPrimary = true,
+            }));
+        }
+
+        // ★ إزالة الرئيسي القديم للمرحلة — مطابق GAS سطر 531
+        foreach (var s in stageSessions) s.IsPrimary = false;
+
+        // إضافة رقم جديد كرئيسي
         var session = new WhatsAppSession
         {
-            PhoneNumber = request.PhoneNumber,
-            Stage = request.Stage ?? "",
-            UserType = request.UserType ?? "",
-            ConnectionStatus = "\u063a\u064a\u0631 \u0645\u062a\u0635\u0644", // غير متصل
-            LinkedAt = DateTime.Now,
-            IsPrimary = true, // New phone is always set as primary (matches old behavior)
+            PhoneNumber      = cleanPhone,
+            Stage            = effectiveStage,
+            UserType         = request.UserType ?? "",
+            ConnectionStatus = "متصل",
+            LinkedAt         = DateTime.Now,
+            LastUsed         = DateTime.Now,
+            IsPrimary        = true,
         };
 
         _db.WhatsAppSessions.Add(session);
         await _db.SaveChangesAsync();
 
-        return Ok(ApiResponse<object>.Ok(new { id = session.Id }));
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            id        = session.Id,
+            message   = "تم حفظ الرقم كرقم رئيسي",
+            isPrimary = true,
+        }));
     }
 
     [HttpPut("sessions/{id}/primary")]
@@ -412,24 +502,88 @@ public class WhatsAppController : ControllerBase
     [HttpGet("stats")]
     public async Task<ActionResult<ApiResponse<object>>> GetStats([FromQuery] string? stage = null)
     {
-        var query = _db.WhatsAppSessions.AsQueryable();
+        var settings  = await _db.WhatsAppSettings.FirstOrDefaultAsync();
+        var serverUrl = settings?.ServerUrl ?? "";
+
+        // جلب الأرقام المحفوظة للمرحلة — مطابق savedSessions في GAS
+        var savedQ = _db.WhatsAppSessions.AsQueryable();
         if (!string.IsNullOrEmpty(stage))
-            query = query.Where(s => s.Stage == stage);
+            savedQ = savedQ.Where(s => s.Stage == stage);
+        var savedSessions = await savedQ.ToListAsync();
 
-        var sessions = await query.ToListAsync();
-        var total = sessions.Count;
-        var connected = sessions.Count(s => s.ConnectionStatus == "متصل");
-        var totalMessages = sessions.Sum(s => s.MessageCount);
-
-        return Ok(ApiResponse<object>.Ok(new
+        // جلب الأرقام المتصلة من السيرفر — مطابق connectedPhones في GAS
+        var serverPhones = new List<string>();
+        if (!string.IsNullOrEmpty(serverUrl))
         {
-            total, connected, totalMessages,
-            sessions = sessions.Select(s => new
+            var connected = await _waServer.GetConnectedSessionsAsync(serverUrl);
+            serverPhones = connected;
+        }
+
+        if (!string.IsNullOrEmpty(stage))
+        {
+            // ★ getWhatsAppStats(stage) — مطابق GAS سطر 1211
+            var allSessWithStatus = savedSessions.Select(s => new
             {
-                s.Id, s.PhoneNumber, s.Stage, s.UserType,
-                s.ConnectionStatus, s.IsPrimary, s.MessageCount, s.LastUsed
-            })
-        }));
+                phone        = s.PhoneNumber,
+                stage        = s.Stage,
+                userType     = s.UserType,
+                status       = serverPhones.Contains(s.PhoneNumber) ? "متصل" : "غير متصل",
+                linkedDate   = s.LinkedAt?.ToString("yyyy/MM/dd HH:mm") ?? "",
+                lastUsed     = s.LastUsed?.ToString("yyyy/MM/dd HH:mm") ?? "",
+                messageCount = s.MessageCount,
+                isPrimary    = s.IsPrimary,
+            }).ToList();
+
+            var connectedSess = allSessWithStatus.Where(s => s.status == "متصل").Cast<object>().ToList();
+            var totalMessages = savedSessions.Sum(s => s.MessageCount);
+
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                success = true,
+                stats = new
+                {
+                    connectedPhones = connectedSess.Count,
+                    savedPhones     = savedSessions.Count,
+                    totalMessages,
+                    sessions    = connectedSess,
+                    allSessions = allSessWithStatus.Cast<object>().ToList(),
+                },
+                stage,
+            }));
+        }
+        else
+        {
+            // ★ getAllPhonesStats() — مطابق GAS سطر 1244
+            var phones = savedSessions.Select(s =>
+            {
+                var isConnected = serverPhones.Contains(s.PhoneNumber);
+                return new
+                {
+                    phone        = s.PhoneNumber,
+                    stage        = s.Stage,
+                    userType     = s.UserType,
+                    status       = isConnected ? "متصل" : "غير متصل",
+                    linkedDate   = s.LinkedAt?.ToString("yyyy/MM/dd HH:mm") ?? "",
+                    lastUsed     = s.LastUsed?.ToString("yyyy/MM/dd HH:mm") ?? "",
+                    messageCount = s.MessageCount,
+                };
+            }).ToList();
+
+            var totalMessages  = phones.Sum(p => p.messageCount);
+            var connectedCount = phones.Count(p => p.status == "متصل");
+
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                success = true,
+                stats = new
+                {
+                    totalPhones      = phones.Count,
+                    connectedPhones  = connectedCount,
+                    totalMessages,
+                    phones           = phones.Cast<object>().ToList(),
+                },
+            }));
+        }
     }
 
     [HttpGet("user-types")]
@@ -646,6 +800,14 @@ public class WhatsAppController : ControllerBase
         }));
     }
 
+    // ===== مساعد: إخفاء رقم الجوال =====
+    // مطابق لـ maskPhone() في Server_WhatsApp.gs: substring(0,6) + '****' + substring(length-2)
+    private static string? MaskPhone(string? phone)
+    {
+        if (string.IsNullOrEmpty(phone) || phone.Length < 8) return null;
+        return phone[..6] + "****" + phone[^2..];
+    }
+
     // ===== مساعد: تنظيف رقم الجوال =====
     // مطابق لـ cleanPhoneNumber() في Server_WhatsApp.gs سطر 1063–1073
     private static string CleanPhoneNumber(string phone)
@@ -657,7 +819,9 @@ public class WhatsAppController : ControllerBase
         return clean;
     }
 
-    private static string? MaskPhone(string? phone)
+    // ===== Security Code =====
+
+    [HttpGet("security/status")]
     public async Task<ActionResult<ApiResponse<object>>> GetSecurityStatus()
     {
         var settings = await _db.WhatsAppSettings.FirstOrDefaultAsync();
@@ -716,13 +880,13 @@ public class WhatsAppController : ControllerBase
         if (string.IsNullOrEmpty(targetPhone))
             return Ok(ApiResponse.Fail("جوال الاسترجاع غير محدد"));
 
-        // Generate 4-digit code
-        var code = new Random().Next(1000, 9999).ToString();
+        // Generate 4-digit code — مطابق GAS: Math.floor(1000 + Math.random() * 9000) → 1000-9999
+        var code = new Random().Next(1000, 10000).ToString();
         settings.TempRecoveryCode = code;
         settings.RecoveryCodeExpiry = DateTime.UtcNow.AddMinutes(5);
         await _db.SaveChangesAsync();
 
-        // Send via WhatsApp
+        // Send via WhatsApp — نص الرسالة مطابق لـ GAS سطر 283
         var serverUrl = settings.ServerUrl ?? "";
         if (!string.IsNullOrEmpty(serverUrl))
         {
@@ -730,7 +894,7 @@ public class WhatsAppController : ControllerBase
             if (!string.IsNullOrEmpty(senderPhone))
             {
                 await _waServer.SendMessageAsync(serverUrl, senderPhone, targetPhone,
-                    $"رمز استرجاع الأمان الخاص بنظام شؤون الطلاب: {code}\n\nصالح لمدة 5 دقائق فقط.");
+                    $"🔐 رمز استرجاع رمز الأمان الخاص بنظام التوجيه الطلابي:\n\n{code}\n\nصالح لمدة 5 دقائق فقط.");
             }
         }
 
@@ -786,12 +950,6 @@ public class WhatsAppController : ControllerBase
 
         await _db.SaveChangesAsync();
         return Ok(ApiResponse.Ok("تم تغيير رمز الأمان بنجاح"));
-    }
-
-    private static string? MaskPhone(string? phone)
-    {
-        if (string.IsNullOrEmpty(phone) || phone.Length < 4) return null;
-        return phone[..3] + new string('*', phone.Length - 5) + phone[^2..];
     }
 }
 
