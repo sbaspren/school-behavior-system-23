@@ -22,18 +22,22 @@ public class SaveStructureRequest
 {
     public string SchoolType { get; set; } = "بنين";
     public string SecondarySystem { get; set; } = "فصلي";
-    public Dictionary<string, StageGradesRequest> Stages { get; set; } = new();
+    /// <summary>مصفوفة المراحل — مطابق لـ StageConfigData[] في الواجهة</summary>
+    public List<StageConfigRequest> Stages { get; set; } = new();
     /// <summary>تأكيد حذف المراحل المُلغاة — مطابق لـ confirmedDeletion في Config.gs سطر 172</summary>
     public bool ConfirmedDeletion { get; set; } = false;
 }
 
-public class StageGradesRequest
+public class StageConfigRequest
 {
-    public Dictionary<string, GradeRequest> Grades { get; set; } = new();
+    public string Stage { get; set; } = "";
+    public bool IsEnabled { get; set; }
+    public List<GradeConfigRequest> Grades { get; set; } = new();
 }
 
-public class GradeRequest
+public class GradeConfigRequest
 {
-    public bool Enabled { get; set; }
+    public string GradeName { get; set; } = "";
+    public bool IsEnabled { get; set; }
     public int ClassCount { get; set; }
 }

@@ -30,9 +30,11 @@ public class SettingsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ApiResponse>> SaveSettings([FromBody] SaveSettingsRequest request)
     {
-        // التحقق من القيم المسموحة (مطابق للنظام الأصلي)
-        var letterheadMode = request.LetterheadMode == "image" ? LetterheadMode.Image : LetterheadMode.Text;
-        var whatsappMode = request.WhatsAppMode == "unified" ? WhatsAppMode.Unified : WhatsAppMode.PerStage;
+        // التحقق من القيم المسموحة (يدعم PascalCase من الواجهة و lowercase من الأصلي)
+        var letterheadMode = string.Equals(request.LetterheadMode, "image", StringComparison.OrdinalIgnoreCase)
+            ? LetterheadMode.Image : LetterheadMode.Text;
+        var whatsappMode = string.Equals(request.WhatsAppMode, "unified", StringComparison.OrdinalIgnoreCase)
+            ? WhatsAppMode.Unified : WhatsAppMode.PerStage;
 
         // تنظيف المدخلات
         var schoolName = SanitizeInput(request.SchoolName);
@@ -93,8 +95,8 @@ public class SettingsController : ControllerBase
 
         return Ok(ApiResponse<object>.Ok(new
         {
-            schoolType = settings?.SchoolType == SchoolType.Girls ? "بنات" : "بنين",
-            secondarySystem = settings?.SecondarySystem == SecondarySystem.Tracks ? "مسارات" : "فصلي",
+            schoolType = settings?.SchoolType.ToString() ?? "Boys",
+            secondarySystem = settings?.SecondarySystem.ToString() ?? "Semester",
             stages = stagesArray
         }));
     }
@@ -102,35 +104,27 @@ public class SettingsController : ControllerBase
     [HttpPost("structure")]
     public async Task<ActionResult<ApiResponse>> SaveStructure([FromBody] SaveStructureRequest request)
     {
-        // التحقق من القيم المسموحة (مطابق للنظام الأصلي)
-        var schoolType = request.SchoolType == "بنات" ? SchoolType.Girls : SchoolType.Boys;
-        var secondarySystem = request.SecondarySystem == "مسارات" ? SecondarySystem.Tracks : SecondarySystem.Semester;
-
-        var validStageIds = new[] { "kindergarten", "primary", "intermediate", "secondary" };
+        // التحقق من القيم المسموحة (يدعم القيم العربية والإنجليزية من الواجهة)
+        var schoolType = (request.SchoolType == "بنات" || string.Equals(request.SchoolType, "Girls", StringComparison.OrdinalIgnoreCase))
+            ? SchoolType.Girls : SchoolType.Boys;
+        var secondarySystem = (request.SecondarySystem == "مسارات" || string.Equals(request.SecondarySystem, "Tracks", StringComparison.OrdinalIgnoreCase))
+            ? SecondarySystem.Tracks : SecondarySystem.Semester;
 
         var stageConfigs = new List<StageConfig>();
         bool hasEnabledStage = false;
 
-        foreach (var (stageId, stageData) in request.Stages)
+        foreach (var stageReq in request.Stages)
         {
-            if (!validStageIds.Contains(stageId)) continue;
-
-            var stage = stageId switch
-            {
-                "kindergarten" => Stage.Kindergarten,
-                "primary" => Stage.Primary,
-                "intermediate" => Stage.Intermediate,
-                "secondary" => Stage.Secondary,
-                _ => Stage.Primary
-            };
+            // تحويل اسم المرحلة إلى enum (يدعم PascalCase من الواجهة)
+            if (!Enum.TryParse<Stage>(stageReq.Stage, true, out var stage)) continue;
 
             var gradeConfigs = new List<GradeConfig>();
             bool stageHasEnabled = false;
 
-            foreach (var (gradeName, gradeData) in stageData.Grades)
+            foreach (var gradeReq in stageReq.Grades)
             {
-                var classCount = Math.Min(gradeData.ClassCount, 15); // حد أقصى 15 (مطابق للأصلي)
-                if (gradeData.Enabled && classCount > 0)
+                var classCount = Math.Min(gradeReq.ClassCount, 15); // حد أقصى 15 (مطابق للأصلي)
+                if (gradeReq.IsEnabled && classCount > 0)
                 {
                     stageHasEnabled = true;
                     hasEnabledStage = true;
@@ -138,8 +132,8 @@ public class SettingsController : ControllerBase
 
                 gradeConfigs.Add(new GradeConfig
                 {
-                    GradeName = gradeName,
-                    IsEnabled = gradeData.Enabled,
+                    GradeName = gradeReq.GradeName,
+                    IsEnabled = gradeReq.IsEnabled,
                     ClassCount = classCount
                 });
             }
