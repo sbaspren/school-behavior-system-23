@@ -6,6 +6,7 @@ import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
 import { printForm } from '../utils/printTemplates';
 import { printDailyReport } from '../utils/printDaily';
+import { templatesApi } from '../api/templates';
 
 const TARDINESS_TYPES: Record<string, { label: string; color: string; bg: string }> = {
   Morning: { label: 'تأخر صباحي', color: '#dc2626', bg: '#fee2e2' },
@@ -267,13 +268,15 @@ const TodayTab: React.FC<{
         <button onClick={handleExport} style={{ height: '38px', padding: '0 16px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📥 تصدير</button>
       </div>
 
+      {/* Floating Selection Bar */}
       {selected.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#eff6ff', borderRadius: '10px', marginBottom: '12px', border: '1px solid #bfdbfe' }}>
-          <span style={{ fontWeight: 700, color: '#1e40af' }}>تم تحديد {selected.size}</span>
-          <div style={{ flex: 1 }} />
-          <button onClick={handleSendBulk} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📱 إرسال واتساب</button>
-          <button onClick={handleDeleteBulk} style={{ padding: '6px 16px', background: '#dc2626', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
-          <button onClick={() => setSelected(new Set())} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>إلغاء</button>
+        <div style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(30,64,175,0.95)', color: '#fff', padding: '12px 24px', borderRadius: '100px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '16px', zIndex: 50, backdropFilter: 'blur(8px)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontWeight: 800, fontSize: '16px' }}>{selected.size}</span><span style={{ fontSize: '13px' }}>محدد</span></span>
+          <span style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.3)' }} />
+          <button onClick={handlePrintToday} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🖨️ طباعة</button>
+          <button onClick={handleSendBulk} style={{ background: 'none', border: 'none', color: '#a7f3d0', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>📱 إرسال</button>
+          <button onClick={handleDeleteBulk} style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🗑️ حذف</button>
+          <button onClick={() => setSelected(new Set())} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
         </div>
       )}
 
@@ -368,6 +371,21 @@ const MessageEditorModal: React.FC<{
   const typeLabel = TARDINESS_TYPES[record.tardinessType]?.label || record.tardinessType;
   const defaultMsg = `ولي أمر الطالب / ${record.studentName}\nالسلام عليكم ورحمة الله وبركاته\nنفيدكم بأن ابنكم قد سُجّل عليه ${typeLabel}${record.period ? ` (${record.period})` : ''} بتاريخ ${hijriDate}.\nنأمل متابعة الطالب والحرص على الحضور في الوقت المحدد.\nمع تحيات إدارة المدرسة`;
   const [message, setMessage] = useState(defaultMsg);
+  const [templateLoaded, setTemplateLoaded] = useState(false);
+
+  useEffect(() => {
+    templatesApi.getByType('تأخر').then(res => {
+      const saved = res.data?.data?.template;
+      if (saved) {
+        const filled = saved.replace('{اسم_الطالب}', record.studentName).replace('{نوع_التأخر}', typeLabel).replace('{الحصة}', record.period || '').replace('{التاريخ}', hijriDate);
+        setMessage(filled);
+        setTemplateLoaded(true);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveAsTemplate = async () => { try { await templatesApi.save('تأخر', message); showSuccess('تم حفظ القالب'); } catch { showError('فشل'); } };
+  const handleResetTemplate = async () => { try { await templatesApi.delete('تأخر'); setMessage(defaultMsg); setTemplateLoaded(false); showSuccess('تم استعادة القالب الافتراضي'); } catch { showError('فشل'); } };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -384,7 +402,9 @@ const MessageEditorModal: React.FC<{
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={8}
             style={{ width: '100%', padding: '12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', lineHeight: 1.8, resize: 'vertical', boxSizing: 'border-box', direction: 'rtl' }} />
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-            <button onClick={() => setMessage(defaultMsg)} style={{ padding: '4px 10px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+            <button onClick={handleSaveAsTemplate} style={{ padding: '4px 12px', background: '#eef2ff', color: '#4f46e5', borderRadius: '6px', border: '1px solid #c7d2fe', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>💾 حفظ كقالب</button>
+            <button onClick={handleResetTemplate} style={{ padding: '4px 12px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+            {templateLoaded && <span style={{ fontSize: '11px', color: '#059669', alignSelf: 'center' }}>✓ قالب محفوظ</span>}
           </div>
         </div>
         <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>

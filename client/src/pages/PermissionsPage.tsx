@@ -6,6 +6,7 @@ import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
 import { printForm } from '../utils/printTemplates';
 import { printDailyReport } from '../utils/printDaily';
+import { templatesApi } from '../api/templates';
 
 const REASONS = ['مرض', 'مراجعة طبية', 'ظروف عائلية', 'مراجعة حكومية', 'أخرى'];
 
@@ -201,13 +202,15 @@ const TodayTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void; stag
         <button onClick={handleExport} style={{ height: '38px', padding: '0 16px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📥 تصدير</button>
       </div>
 
+      {/* Floating Selection Bar */}
       {selected.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#f5f3ff', borderRadius: '10px', marginBottom: '12px', border: '1px solid #ddd6fe' }}>
-          <span style={{ fontWeight: 700, color: '#6d28d9' }}>تم تحديد {selected.size}</span>
-          <div style={{ flex: 1 }} />
-          <button onClick={handleSendBulk} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📱 إرسال واتساب</button>
-          <button onClick={handleDeleteBulk} style={{ padding: '6px 16px', background: '#dc2626', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
-          <button onClick={() => setSelected(new Set())} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>إلغاء</button>
+        <div style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(109,40,217,0.95)', color: '#fff', padding: '12px 24px', borderRadius: '100px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '16px', zIndex: 50, backdropFilter: 'blur(8px)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontWeight: 800, fontSize: '16px' }}>{selected.size}</span><span style={{ fontSize: '13px' }}>محدد</span></span>
+          <span style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.3)' }} />
+          <button onClick={handlePrint} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🖨️ طباعة</button>
+          <button onClick={handleSendBulk} style={{ background: 'none', border: 'none', color: '#a7f3d0', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>📱 إرسال</button>
+          <button onClick={handleDeleteBulk} style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🗑️ حذف</button>
+          <button onClick={() => setSelected(new Set())} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
         </div>
       )}
 
@@ -272,6 +275,21 @@ const PermMsgEditorModal: React.FC<{ record: PermissionRow; onSend: (message: st
   const hijriDate = record.hijriDate || new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
   const defaultMsg = `ولي أمر الطالب / ${record.studentName}\nالسلام عليكم ورحمة الله وبركاته\nنفيدكم بأن ابنكم قد تم تسجيل استئذان له بتاريخ ${hijriDate}${record.exitTime ? ` الساعة ${record.exitTime}` : ''}${record.reason ? ` بسبب: ${record.reason}` : ''}${record.receiver ? `\nوتم تسليمه إلى: ${record.receiver}` : ''}.\nمع تحيات إدارة المدرسة`;
   const [message, setMessage] = useState(defaultMsg);
+  const [templateLoaded, setTemplateLoaded] = useState(false);
+
+  useEffect(() => {
+    templatesApi.getByType('استئذان').then(res => {
+      const saved = res.data?.data?.template;
+      if (saved) {
+        const filled = saved.replace('{اسم_الطالب}', record.studentName).replace('{التاريخ}', hijriDate).replace('{السبب}', record.reason || '').replace('{المستلم}', record.receiver || '');
+        setMessage(filled);
+        setTemplateLoaded(true);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveAsTemplate = async () => { try { await templatesApi.save('استئذان', message); showSuccess('تم حفظ القالب'); } catch { showError('فشل'); } };
+  const handleResetTemplate = async () => { try { await templatesApi.delete('استئذان'); setMessage(defaultMsg); setTemplateLoaded(false); showSuccess('تم استعادة القالب الافتراضي'); } catch { showError('فشل'); } };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -287,7 +305,11 @@ const PermMsgEditorModal: React.FC<{ record: PermissionRow; onSend: (message: st
           <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نص الرسالة</label>
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={8}
             style={{ width: '100%', padding: '12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', lineHeight: 1.8, resize: 'vertical', boxSizing: 'border-box', direction: 'rtl' }} />
-          <button onClick={() => setMessage(defaultMsg)} style={{ marginTop: '8px', padding: '4px 10px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <button onClick={handleSaveAsTemplate} style={{ padding: '4px 12px', background: '#eef2ff', color: '#4f46e5', borderRadius: '6px', border: '1px solid #c7d2fe', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>💾 حفظ كقالب</button>
+            <button onClick={handleResetTemplate} style={{ padding: '4px 12px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+            {templateLoaded && <span style={{ fontSize: '11px', color: '#059669', alignSelf: 'center' }}>✓ قالب محفوظ</span>}
+          </div>
         </div>
         <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>

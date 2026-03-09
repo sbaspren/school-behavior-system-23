@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { educationalNotesApi } from '../api/educationalNotes';
 import { studentsApi } from '../api/students';
 import { settingsApi, StageConfigData } from '../api/settings';
+import { templatesApi } from '../api/templates';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
 import { printForm } from '../utils/printTemplates';
@@ -285,13 +286,6 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
         <button onClick={() => loadToday()} style={btnStyle('#f3f4f6', '#374151')}>تحديث</button>
         <button onClick={() => setTypesModalOpen(true)} style={btnStyle('#fef3c7', '#92400e')}>أنواع الملاحظات</button>
         <div style={{ flex: 1 }} />
-        {selected.size > 0 && (
-          <>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: THEME }}>{selected.size} محدد</span>
-            <button onClick={handleBulkSend} disabled={sending} style={btnStyle('#22c55e', '#fff')}>{sending ? 'جاري الإرسال...' : 'إرسال للمحددين'}</button>
-            <button onClick={handleBulkDelete} style={btnStyle('#fee2e2', '#dc2626')}>حذف المحددين</button>
-          </>
-        )}
         <button onClick={printToday} style={btnStyle('#f3f4f6', '#374151')}>طباعة</button>
         <button onClick={handleExport} style={btnStyle('#f3f4f6', '#374151')}>تصدير CSV</button>
       </div>
@@ -372,22 +366,69 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
           </div>
         </div>
       )}
+
+      {/* ★ Floating Selection Bar */}
+      {selected.size > 0 && (
+        <div style={{ position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(6,78,59,0.95)', color: '#fff', padding: '12px 24px', borderRadius: '100px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '16px', zIndex: 50, backdropFilter: 'blur(8px)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontWeight: 800, fontSize: '16px' }}>{selected.size}</span>
+            <span style={{ fontSize: '13px' }}>محدد</span>
+          </span>
+          <span style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.3)' }} />
+          <button onClick={printToday} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🖨️ طباعة</button>
+          <button onClick={handleBulkSend} disabled={sending} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#a7f3d0', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>{sending ? '⏳ جاري...' : '📱 إرسال'}</button>
+          <button onClick={handleBulkDelete} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🗑️ حذف</button>
+          <button onClick={() => setSelected(new Set())} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '16px', marginRight: '4px' }}>✕</button>
+        </div>
+      )}
     </div>
   );
 };
-
-// ────────────────────────── Message Editor ──────────────────────────
 const EduMsgEditor: React.FC<{ record: NoteRow; onSend: (msg: string) => void; onClose: () => void }> = ({ record, onSend, onClose }) => {
   const hijriDate = record.hijriDate || new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
   const defaultMsg = `ولي أمر الطالب / ${record.studentName}\nالسلام عليكم ورحمة الله وبركاته\nنفيدكم بأنه تم تسجيل ملاحظة تربوية على ابنكم:\nنوع الملاحظة: ${record.noteType}${record.details ? `\nالتفاصيل: ${record.details}` : ''}\nالتاريخ: ${hijriDate}\nنأمل متابعة الطالب والتعاون معنا.\nمع تحيات إدارة المدرسة`;
   const [message, setMessage] = useState(defaultMsg);
+  const [templateLoaded, setTemplateLoaded] = useState(false);
+
+  // تحميل القالب المحفوظ عند الفتح
+  useEffect(() => {
+    templatesApi.getByType('ملاحظة').then(res => {
+      const saved = res.data?.data?.template;
+      if (saved) {
+        const filled = saved.replace('{اسم_الطالب}', record.studentName).replace('{نوع_الملاحظة}', record.noteType || '').replace('{التفاصيل}', record.details || '').replace('{التاريخ}', hijriDate);
+        setMessage(filled);
+        setTemplateLoaded(true);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveAsTemplate = async () => {
+    try {
+      await templatesApi.save('ملاحظة', message);
+      showSuccess('تم حفظ القالب');
+    } catch { showError('فشل حفظ القالب'); }
+  };
+
+  const handleResetTemplate = async () => {
+    try {
+      await templatesApi.delete('ملاحظة');
+      setMessage(defaultMsg);
+      setTemplateLoaded(false);
+      showSuccess('تم استعادة القالب الافتراضي');
+    } catch { showError('فشل استعادة القالب'); }
+  };
+
   return (
     <>
       <div style={{ padding: '20px 24px' }}>
         <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نص الرسالة</label>
         <textarea value={message} onChange={e => setMessage(e.target.value)} rows={8}
           style={{ width: '100%', padding: '12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', lineHeight: 1.8, resize: 'vertical', boxSizing: 'border-box', direction: 'rtl' }} />
-        <button onClick={() => setMessage(defaultMsg)} style={{ marginTop: '8px', padding: '4px 10px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <button onClick={handleSaveAsTemplate} style={{ padding: '4px 12px', background: '#eef2ff', color: '#4f46e5', borderRadius: '6px', border: '1px solid #c7d2fe', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>💾 حفظ كقالب</button>
+          <button onClick={handleResetTemplate} style={{ padding: '4px 12px', background: '#f3f4f6', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#6b7280' }}>إعادة تعيين</button>
+          {templateLoaded && <span style={{ fontSize: '11px', color: '#059669', alignSelf: 'center' }}>✓ تم تحميل القالب المحفوظ</span>}
+        </div>
       </div>
       <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
         <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
@@ -605,27 +646,94 @@ const ApprovedTab: React.FC<{ stage: string; noteTypes: string[]; schoolSettings
 
 // ────────────────────────── REPORTS TAB ──────────────────────────
 const ReportsTab: React.FC<{ stage: string }> = ({ stage }) => {
-  const [report, setReport] = useState<ReportData | null>(null);
+  const [allRecords, setAllRecords] = useState<NoteRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [gradeFilter, setGradeFilter] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  const loadReport = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     if (!stage) return;
     setLoading(true);
     try {
-      const res = await educationalNotesApi.getReport(stage);
-      if (res.data?.data) setReport(res.data.data);
+      const res = await educationalNotesApi.getAll({ stage });
+      if (res.data?.data) setAllRecords(res.data.data);
     } catch { /* empty */ }
     finally { setLoading(false); }
   }, [stage]);
 
-  useEffect(() => { loadReport(); }, [loadReport]);
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const grades = useMemo(() => Array.from(new Set(allRecords.map(r => r.grade))).sort(), [allRecords]);
+  const classes = useMemo(() => {
+    if (!gradeFilter) return [];
+    return Array.from(new Set(allRecords.filter(r => r.grade === gradeFilter).map(r => r.className))).sort();
+  }, [allRecords, gradeFilter]);
+
+  const filtered = useMemo(() => {
+    let list = allRecords;
+    if (gradeFilter) list = list.filter(r => r.grade === gradeFilter);
+    if (classFilter) list = list.filter(r => r.className === classFilter);
+    if (dateFrom) list = list.filter(r => (r.hijriDate || '') >= dateFrom);
+    if (dateTo) list = list.filter(r => (r.hijriDate || '') <= dateTo);
+    return list;
+  }, [allRecords, gradeFilter, classFilter, dateFrom, dateTo]);
+
+  const report = useMemo(() => {
+    const total = filtered.length;
+    const uniqueStudents = new Set(filtered.map(r => r.studentId)).size;
+    const sent = filtered.filter(r => r.isSent).length;
+    const unsent = total - sent;
+
+    const studentCounts: Record<number, { studentName: string; grade: string; className: string; count: number }> = {};
+    filtered.forEach(r => {
+      if (!studentCounts[r.studentId]) studentCounts[r.studentId] = { studentName: r.studentName, grade: r.grade, className: r.className, count: 0 };
+      studentCounts[r.studentId].count++;
+    });
+    const topStudents = Object.values(studentCounts).sort((a, b) => b.count - a.count).slice(0, 10);
+
+    const classCounts: Record<string, number> = {};
+    filtered.forEach(r => { const k = `${r.grade} ${r.className}`; classCounts[k] = (classCounts[k] || 0) + 1; });
+    const byClass = Object.entries(classCounts).sort((a, b) => b[1] - a[1]).map(([className, count]) => ({ className, count }));
+
+    const typeCounts: Record<string, number> = {};
+    filtered.forEach(r => { const t = r.noteType || 'غير محدد'; typeCounts[t] = (typeCounts[t] || 0) + 1; });
+    const byType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count }));
+
+    return { total, uniqueStudents, sent, unsent, topStudents, byClass, byType };
+  }, [filtered]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>جاري التحميل...</div>;
-  if (!report) return <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>اضغط تحديث لعرض البيانات</div>;
 
   return (
     <div>
-      <button onClick={loadReport} style={{ ...btnStyle('#4f46e5', '#fff'), marginBottom: '16px' }}>تحديث</button>
+      {/* فلاتر */}
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e5e7eb', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>الصف</label>
+          <select value={gradeFilter} onChange={e => { setGradeFilter(e.target.value); setClassFilter(''); }} style={selectStyle}>
+            <option value="">كل الصفوف</option>
+            {grades.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>الفصل</label>
+          <select value={classFilter} onChange={e => setClassFilter(e.target.value)} disabled={!gradeFilter} style={selectStyle}>
+            <option value="">كل الفصول</option>
+            {classes.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>من تاريخ</label>
+          <input type="text" value={dateFrom} onChange={e => setDateFrom(e.target.value)} placeholder="هجري" style={{ ...selectStyle, width: '120px' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>إلى تاريخ</label>
+          <input type="text" value={dateTo} onChange={e => setDateTo(e.target.value)} placeholder="هجري" style={{ ...selectStyle, width: '120px' }} />
+        </div>
+        <button onClick={loadAll} style={{ ...btnStyle('#4f46e5', '#fff'), height: '40px' }}>تحديث</button>
+      </div>
 
       {/* Stats cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
