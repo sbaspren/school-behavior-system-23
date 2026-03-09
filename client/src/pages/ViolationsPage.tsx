@@ -398,6 +398,29 @@ const TodayTab: React.FC<{
     } catch { showError('خطأ في التصدير'); }
   };
 
+  // طباعة مخالفات اليوم (printTodayViolations)
+  const handlePrintToday = () => {
+    if (filtered.length === 0) return;
+    const toIndic = (n: string | number) => String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)]);
+    const today = new Date();
+    const hijri = today.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' });
+    const miladi = today.toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
+    const dayName = today.toLocaleDateString('ar-SA', { weekday: 'long' });
+    const sorted = [...filtered].sort((a, b) => `${a.grade}${a.className}`.localeCompare(`${b.grade}${b.className}`) || a.studentName.localeCompare(b.studentName, 'ar'));
+    let lastKey = '';
+    const rows = sorted.map((v, i) => {
+      const key = `${v.grade}${v.className}`;
+      const sep = key !== lastKey && i > 0 ? `<tr style="background:#f0f0f0;font-weight:700"><td colspan="7">${v.grade} / ${v.className}</td></tr>` : (i === 0 ? `<tr style="background:#f0f0f0;font-weight:700"><td colspan="7">${v.grade} / ${v.className}</td></tr>` : '');
+      lastKey = key;
+      return `${sep}<tr><td>${toIndic(i + 1)}</td><td style="font-weight:bold">${v.studentName}</td><td>${v.description}</td><td>${toIndic(v.degree)}</td><td>${v.procedures || '-'}</td><td style="color:${v.isSent ? 'green' : '#999'};font-weight:bold">${v.isSent ? 'تم' : '-'}</td></tr>`;
+    }).join('');
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<html dir="rtl"><head><title>مخالفات اليوم</title><style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#4f46e5;color:white}h2{text-align:center}@media print{body{padding:15px}}</style></head><body><h2>سجل المخالفات السلوكية ليوم ${dayName}</h2><p style="text-align:center">${hijri} الموافق ${miladi} م</p><table><thead><tr><th style="width:5%">م</th><th style="width:28%">اسم الطالب</th><th style="width:25%">المخالفة</th><th style="width:5%">د</th><th style="width:20%">الإجراءات</th><th style="width:7%">التواصل</th></tr></thead><tbody>${rows}</tbody></table><p style="text-align:center;margin-top:10px">${toIndic(filtered.length)} مخالفة</p></body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 300);
+  };
+
   return (
     <>
       {/* Filters */}
@@ -412,6 +435,9 @@ const TodayTab: React.FC<{
             <option key={d} value={d}>الدرجة {DEGREE_LABELS[d].label}</option>
           ))}
         </select>
+        <button onClick={handlePrintToday} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
+          🖨️ طباعة
+        </button>
         <button onClick={handleExport} style={{ height: '38px', padding: '0 16px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
           📥 تصدير CSV
         </button>
