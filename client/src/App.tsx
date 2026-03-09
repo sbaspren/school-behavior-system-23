@@ -26,6 +26,7 @@ import AttendancePage from './pages/AttendancePage';
 import AuditLogPage from './pages/AuditLogPage';
 import ReportsPage from './pages/ReportsPage';
 import GeneralFormsPage from './pages/GeneralFormsPage';
+import HistoryPage from './pages/HistoryPage';
 import ParentExcusePublicPage from './pages/ParentExcusePublicPage';
 import './App.css';
 
@@ -115,6 +116,7 @@ function AppContent() {
         <main style={{ flex: 1, overflowY: 'auto', padding: '24px', background: '#f4f5f9' }}>
           <Routes>
             <Route path="/violations" element={<ViolationsPage />} />
+            <Route path="/behavior-history" element={<HistoryPage />} />
             <Route path="/positive" element={<PositiveBehaviorPage />} />
             <Route path="/tardiness" element={<TardinessPage />} />
             <Route path="/attendance" element={<AttendancePage />} />

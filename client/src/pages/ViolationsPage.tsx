@@ -650,6 +650,27 @@ const ApprovedTab: React.FC<{
         <button onClick={handlePrintArchive} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
       </div>
 
+      {/* Quick Degree Filter Buttons */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={() => setDegreeFilter(0)} style={{
+          padding: '4px 12px', borderRadius: '8px', border: degreeFilter === 0 ? '2px solid #4b5563' : '1px solid #d1d5db',
+          background: degreeFilter === 0 ? '#f3f4f6' : '#fff', color: '#4b5563', fontWeight: 700, fontSize: '12px', cursor: 'pointer',
+        }}>الكل ({violations.length})</button>
+        {[1, 2, 3, 4, 5].map((d) => {
+          const count = violations.filter((v) => v.degree === d).length;
+          const info = DEGREE_LABELS[d];
+          return (
+            <button key={d} onClick={() => setDegreeFilter(degreeFilter === d ? 0 : d)} style={{
+              padding: '4px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer',
+              background: degreeFilter === d ? info.bg : '#fff',
+              color: degreeFilter === d ? info.color : info.color + '99',
+              border: degreeFilter === d ? `2px solid ${info.color}` : `1px solid ${info.color}40`,
+            }}>درجة {d} ({count})</button>
+          );
+        })}
+        <span style={{ marginRight: 'auto', fontSize: '12px', color: '#9ca3af' }}>{allFilteredRecords.length} مخالفة | {studentGroups.length} طالب</span>
+      </div>
+
       {/* Date range filter */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: '#6b7280' }}>الفترة:</span>
@@ -1000,6 +1021,21 @@ const PositiveTab: React.FC<{ stageFilter: string }> = ({ stageFilter }) => {
           <button onClick={() => setViewMode('cards')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#059669' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>🎴 بطاقات</button>
           <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#059669' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>📋 جدول</button>
         </div>
+        <button onClick={() => {
+          if (filtered.length === 0) return;
+          const toIndic = (n: string | number) => String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)]);
+          const hijri = new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' });
+          const sorted = [...filtered].sort((a, b) => a.grade.localeCompare(b.grade, 'ar') || String(a.className).localeCompare(String(b.className), 'ar') || a.studentName.localeCompare(b.studentName, 'ar'));
+          const rows = sorted.map((r, i) => `<tr><td>${toIndic(i+1)}</td><td style="font-weight:bold">${r.studentName}</td><td>${r.grade}</td><td>${r.className}</td><td>${r.behaviorType}</td><td style="font-weight:bold;color:#059669">${r.degree || '-'}</td><td>${r.recordedBy}</td></tr>`).join('');
+          const titleText = `سجل السلوك المتمايز${gradeFilter ? ' - ' + gradeFilter : ''}${classFilter ? ' / ' + classFilter : ''}`;
+          const win = window.open('', '_blank');
+          if (!win) return;
+          win.document.write(`<html dir="rtl"><head><title>${titleText}</title><style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#e5e7eb}h2{text-align:center}@media print{body{padding:15px}}</style></head><body><h2>${titleText}</h2><p style="text-align:center">${hijri} | عدد السجلات: ${toIndic(filtered.length)}</p><table><thead><tr><th style="width:5%">م</th><th style="width:25%">اسم الطالب</th><th style="width:12%">الصف</th><th style="width:8%">الفصل</th><th style="width:25%">السلوك المتمايز</th><th style="width:8%">الدرجة</th><th style="width:15%">المعلم</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+          win.document.close();
+          setTimeout(() => win.print(), 300);
+        }} style={{ padding: '6px 12px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>
+          🖨️ طباعة
+        </button>
       </div>
 
       {studentGroups.length === 0 ? (
@@ -1111,21 +1147,21 @@ const PositiveTab: React.FC<{ stageFilter: string }> = ({ stageFilter }) => {
 // Compensation Tab - درجات التعويض
 // ============================================================
 const COMPENSATION_BEHAVIORS = [
-  { label: 'الانضباط وعدم الغياب بدون عذر', code: '189' },
-  { label: 'التعاون مع الزملاء والمعلمين وإدارة المدرسة', code: '1201017' },
-  { label: 'خدمة المجتمع خارج المدرسة', code: '1601194' },
-  { label: 'تقديم نشاط حواري', code: '1601195' },
-  { label: 'المشاركة في حملة توعوية', code: '1601196' },
-  { label: 'تقديم قصة نجاح', code: '1601197' },
-  { label: 'الالتحاق ببرنامج أو دورة', code: '1601198' },
-  { label: 'أنشطة مهارات التواصل', code: '1601199' },
-  { label: 'مهارات القيادة والمسؤولية', code: '1601200' },
-  { label: 'أنشطة المهارات الرقمية', code: '1601201' },
-  { label: 'مهارات إدارة الوقت', code: '1601202' },
-  { label: 'كتابة رسالة شكر', code: '1601203' },
-  { label: 'تقديم إذاعة مدرسية', code: '1601204' },
-  { label: 'اقتراح لتحسين المدرسة', code: '1601205' },
-  { label: 'أخرى (بتوصية اللجنة)', code: '1601207' },
+  { label: 'انضباط الطالب وعدم غيابه بدون عذر خلال الفصل الدراسي', code: '189', noorValue: '189,' },
+  { label: 'التعاون مع الزملاء والمعلمين وإدارة المدرسة', code: '1201017', noorValue: '1201017,' },
+  { label: 'المشاركة في الخدمة المجتمعية خارج المدرسة', code: '1601194', noorValue: '1601194,' },
+  { label: 'تقديم فعالية حوارية', code: '1601195', noorValue: '1601195,' },
+  { label: 'المشاركة في حملة توعوية', code: '1601196', noorValue: '1601196,' },
+  { label: 'عرض تجارب شخصية ناجحة', code: '1601197', noorValue: '1601197,' },
+  { label: 'الالتحاق ببرنامج أو دورة', code: '1601198', noorValue: '1601198,' },
+  { label: 'المشاركة في أنشطة مهارات الاتصال', code: '1601199', noorValue: '1601199,' },
+  { label: 'المشاركة في أنشطة مهارات القيادة والمسؤولية', code: '1601200', noorValue: '1601200,' },
+  { label: 'المشاركة في أنشطة المهارات الرقمية', code: '1601201', noorValue: '1601201,' },
+  { label: 'المشاركة في أنشطة مهارة إدارة الوقت', code: '1601202', noorValue: '1601202,' },
+  { label: 'كتابة رسالة شكر', code: '1601203', noorValue: '1601203,' },
+  { label: 'المشاركة في الإذاعة', code: '1601204', noorValue: '1601204,' },
+  { label: 'تقديم مقترح لصالح المجتمع المدرسي', code: '1601205', noorValue: '1601205,' },
+  { label: 'أخرى (بناءً على توصية لجنة التوجيه الطلابي)', code: '1601207', noorValue: '1601207,' },
 ];
 
 const CompensationTab: React.FC<{
@@ -1199,11 +1235,13 @@ const CompensationTab: React.FC<{
     if (!compensateModal) return;
     setSaving(true);
     try {
-      const res = await positiveBehaviorApi.add({
+      const behavior = COMPENSATION_BEHAVIORS.find((b) => b.label === selectedBehavior) || COMPENSATION_BEHAVIORS[0];
+      const res = await positiveBehaviorApi.saveCompensation({
         studentId: compensateModal.studentId,
-        behaviorType: selectedBehavior,
-        degree: String(compensateModal.deduction),
-        details: `تعويض عن مخالفة: ${compensateModal.description}`,
+        behaviorText: behavior.label,
+        noorValue: behavior.noorValue,
+        violationId: compensateModal.id,
+        violationCode: compensateModal.violationCode,
       });
       if (res.data?.success) {
         showSuccess('تم تسجيل التعويض بنجاح');
@@ -1680,6 +1718,8 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<StudentOption | null>(null);
+  const [selectedStudents, setSelectedStudents] = useState<StudentOption[]>([]);
+  const [batchMode, setBatchMode] = useState(false);
   const [degree, setDegree] = useState(1);
   const [description, setDescription] = useState('');
   const [violationType, setViolationType] = useState('InPerson');
@@ -1687,6 +1727,10 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
   const [saving, setSaving] = useState(false);
   const [repInfo, setRepInfo] = useState<RepetitionInfo | null>(null);
   const [violationTypes, setViolationTypes] = useState<{ id: number; code: string; description: string; degree: number }[]>([]);
+  // Cascade filters for batch mode
+  const [batchGrade, setBatchGrade] = useState('');
+  const [batchClass, setBatchClass] = useState('');
+  const [selectedViolCode, setSelectedViolCode] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -1699,11 +1743,12 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
   }, []);
 
   useEffect(() => {
-    if (!selectedStudent) { setRepInfo(null); return; }
-    violationsApi.getRepetition(selectedStudent.id, degree).then((res) => {
+    if (!selectedStudent || batchMode) { setRepInfo(null); return; }
+    const code = selectedViolCode || undefined;
+    violationsApi.getRepetition(selectedStudent.id, degree, code).then((res) => {
       if (res.data?.data) setRepInfo(res.data.data);
     });
-  }, [selectedStudent, degree]);
+  }, [selectedStudent, degree, selectedViolCode, batchMode]);
 
   const filteredStudents = useMemo(() => {
     if (!studentSearch) return students.slice(0, 20);
@@ -1713,85 +1758,182 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
     ).slice(0, 20);
   }, [students, studentSearch]);
 
+  // Batch mode: cascade data
+  const batchGrades = useMemo(() => Array.from(new Set(students.map((s) => s.grade))).sort(), [students]);
+  const batchClasses = useMemo(() => {
+    if (!batchGrade) return [];
+    return Array.from(new Set(students.filter((s) => s.grade === batchGrade).map((s) => s.className))).sort();
+  }, [students, batchGrade]);
+  const batchStudentList = useMemo(() => {
+    if (!batchGrade || !batchClass) return [];
+    return students.filter((s) => s.grade === batchGrade && s.className === batchClass).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  }, [students, batchGrade, batchClass]);
+
+  const toggleBatchStudent = (s: StudentOption) => {
+    setSelectedStudents((prev) => prev.find((x) => x.id === s.id) ? prev.filter((x) => x.id !== s.id) : [...prev, s]);
+  };
+  const toggleSelectAll = () => {
+    if (selectedStudents.length === batchStudentList.length) setSelectedStudents([]);
+    else setSelectedStudents([...batchStudentList]);
+  };
+
   const filteredViolTypes = useMemo(() =>
     violationTypes.filter((t) => t.degree === degree),
     [violationTypes, degree]
   );
 
   const handleSave = async () => {
-    if (!selectedStudent) { showError('يرجى اختيار الطالب'); return; }
-    if (!description.trim()) { showError('وصف المخالفة مطلوب'); return; }
-
-    setSaving(true);
-    const data: ViolationData = {
-      studentId: selectedStudent.id,
-      description: description.trim(),
-      type: violationType,
-      degree,
-      notes: notes.trim(),
-    };
-
-    try {
-      const res = await violationsApi.add(data);
-      if (res.data?.success) {
-        const result = res.data.data;
-        showSuccess(`تم تسجيل المخالفة - التكرار: ${result?.repetition || ''} | الحسم: ${result?.deduction || 0}`);
-        onSaved();
-      } else showError(res.data?.message || 'خطأ');
-    } catch { showError('خطأ في الاتصال'); }
-    finally { setSaving(false); }
+    if (batchMode) {
+      if (selectedStudents.length === 0) { showError('يرجى اختيار طالب واحد على الأقل'); return; }
+      if (!selectedViolCode && !description.trim()) { showError('يرجى اختيار المخالفة أو كتابة الوصف'); return; }
+      setSaving(true);
+      try {
+        const res = await violationsApi.addBatch(
+          selectedStudents.map((s) => s.id),
+          selectedViolCode || '',
+          { type: violationType, recordedBy: 'الوكيل', notes: notes.trim() }
+        );
+        if (res.data?.success) {
+          showSuccess(res.data.data?.message || `تم تسجيل ${selectedStudents.length} مخالفة`);
+          onSaved();
+        } else showError(res.data?.message || 'خطأ');
+      } catch { showError('خطأ في الاتصال'); }
+      finally { setSaving(false); }
+    } else {
+      if (!selectedStudent) { showError('يرجى اختيار الطالب'); return; }
+      if (!description.trim()) { showError('وصف المخالفة مطلوب'); return; }
+      setSaving(true);
+      const data: ViolationData = {
+        studentId: selectedStudent.id,
+        violationCode: selectedViolCode || undefined,
+        description: description.trim(),
+        type: violationType,
+        degree,
+        notes: notes.trim(),
+      };
+      try {
+        const res = await violationsApi.add(data);
+        if (res.data?.success) {
+          const result = res.data.data;
+          showSuccess(`تم تسجيل المخالفة - التكرار: ${result?.repetition || ''} | الحسم: ${result?.deduction || 0}`);
+          onSaved();
+        } else showError(res.data?.message || 'خطأ');
+      } catch { showError('خطأ في الاتصال'); }
+      finally { setSaving(false); }
+    }
   };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.6)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #fef2f2, #fee2e2)', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>تسجيل مخالفة سلوكية</h3>
+          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>⚠️ تسجيل مخالفة سلوكية</h3>
           <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
         </div>
 
         {/* Body */}
         <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Batch Toggle */}
+          <div style={{ display: 'flex', gap: '8px', background: '#f3f4f6', borderRadius: '8px', padding: '4px' }}>
+            <button onClick={() => { setBatchMode(false); setSelectedStudents([]); }} style={{
+              flex: 1, padding: '8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+              background: !batchMode ? '#fff' : 'transparent', color: !batchMode ? '#dc2626' : '#6b7280',
+              fontWeight: 700, fontSize: '13px', boxShadow: !batchMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            }}>👤 طالب واحد</button>
+            <button onClick={() => { setBatchMode(true); setSelectedStudent(null); }} style={{
+              flex: 1, padding: '8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+              background: batchMode ? '#fff' : 'transparent', color: batchMode ? '#dc2626' : '#6b7280',
+              fontWeight: 700, fontSize: '13px', boxShadow: batchMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            }}>👥 عدة طلاب</button>
+          </div>
+
           {/* Student Selection */}
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>اختر الطالب *</label>
-            {selectedStudent ? (
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0',
-              }}>
-                <div>
-                  <span style={{ fontWeight: 700, color: '#15803d' }}>{selectedStudent.name}</span>
-                  <span style={{ fontSize: '13px', color: '#6b7280', marginRight: '8px' }}>
-                    {selectedStudent.grade} ({selectedStudent.className})
-                  </span>
-                </div>
-                <button onClick={() => setSelectedStudent(null)} style={{ padding: '4px 12px', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>
-                  تغيير
-                </button>
+          {batchMode ? (
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>اختر الطلاب *</label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <select value={batchGrade} onChange={(e) => { setBatchGrade(e.target.value); setBatchClass(''); setSelectedStudents([]); }}
+                  style={{ flex: 1, height: '38px', padding: '0 10px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px' }}>
+                  <option value="">اختر الصف</option>
+                  {batchGrades.map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <select value={batchClass} onChange={(e) => { setBatchClass(e.target.value); setSelectedStudents([]); }}
+                  disabled={!batchGrade} style={{ flex: 1, height: '38px', padding: '0 10px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', opacity: batchGrade ? 1 : 0.5 }}>
+                  <option value="">اختر الفصل</option>
+                  {batchClasses.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
-            ) : (
-              <>
-                <input type="text" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)}
-                  placeholder="ابحث بالاسم أو رقم الطالب..."
-                  style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box', marginBottom: '8px' }} />
-                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-                  {filteredStudents.map((s) => (
-                    <div key={s.id} onClick={() => setSelectedStudent(s)} style={{
-                      padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}>
-                      <span style={{ fontWeight: 600 }}>{s.name}</span>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>{s.grade} ({s.className})</span>
-                    </div>
-                  ))}
-                  {filteredStudents.length === 0 && (
-                    <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af' }}>لا توجد نتائج</div>
-                  )}
+              {batchStudentList.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <button onClick={toggleSelectAll} style={{ fontSize: '12px', color: '#4f46e5', background: '#eef2ff', border: 'none', padding: '4px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 700 }}>
+                      {selectedStudents.length === batchStudentList.length ? 'إلغاء الكل' : 'تحديد الكل'}
+                    </button>
+                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>{selectedStudents.length} / {batchStudentList.length} محدد</span>
+                  </div>
+                  <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                    {batchStudentList.map((s) => {
+                      const sel = selectedStudents.some((x) => x.id === s.id);
+                      return (
+                        <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', background: sel ? '#f0fdf4' : 'transparent' }}>
+                          <input type="checkbox" checked={sel} onChange={() => toggleBatchStudent(s)} style={{ width: '16px', height: '16px' }} />
+                          <span style={{ fontWeight: sel ? 700 : 400 }}>{s.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>اختر الطالب *</label>
+              {selectedStudent ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                  <div>
+                    <span style={{ fontWeight: 700, color: '#15803d' }}>{selectedStudent.name}</span>
+                    <span style={{ fontSize: '13px', color: '#6b7280', marginRight: '8px' }}>{selectedStudent.grade} ({selectedStudent.className})</span>
+                  </div>
+                  <button onClick={() => setSelectedStudent(null)} style={{ padding: '4px 12px', background: '#fee2e2', color: '#dc2626', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>تغيير</button>
                 </div>
-              </>
-            )}
+              ) : (
+                <>
+                  <input type="text" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)}
+                    placeholder="ابحث بالاسم أو رقم الطالب..."
+                    style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box', marginBottom: '8px' }} />
+                  <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                    {filteredStudents.map((s) => (
+                      <div key={s.id} onClick={() => setSelectedStudent(s)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600 }}>{s.name}</span>
+                        <span style={{ fontSize: '12px', color: '#6b7280' }}>{s.grade} ({s.className})</span>
+                      </div>
+                    ))}
+                    {filteredStudents.length === 0 && <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af' }}>لا توجد نتائج</div>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Violation Type Tabs */}
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نوع المخالفة</label>
+            <div style={{ display: 'flex', gap: '0', borderRadius: '12px', overflow: 'hidden', border: '2px solid #e5e7eb' }}>
+              {[
+                { key: 'InPerson', label: '🏫 حضورية', color: '#4f46e5', bg: '#eef2ff' },
+                { key: 'Digital', label: '💻 رقمية', color: '#0891b2', bg: '#ecfeff' },
+                { key: 'Educational', label: '👨‍🏫 تجاه الهيئة', color: '#e11d48', bg: '#fff1f2' },
+              ].map((t) => (
+                <button key={t.key} onClick={() => setViolationType(t.key)} style={{
+                  flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
+                  background: violationType === t.key ? t.bg : '#fff',
+                  color: violationType === t.key ? t.color : '#6b7280',
+                  fontWeight: 700, fontSize: '13px',
+                  borderBottom: violationType === t.key ? `3px solid ${t.color}` : '3px solid transparent',
+                }}>{t.label}</button>
+              ))}
+            </div>
           </div>
 
           {/* Degree */}
@@ -1802,32 +1944,47 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
                 const info = DEGREE_LABELS[d];
                 const isActive = degree === d;
                 return (
-                  <button key={d} onClick={() => setDegree(d)} style={{
+                  <button key={d} onClick={() => { setDegree(d); setSelectedViolCode(''); setDescription(''); }} style={{
                     flex: 1, padding: '10px 8px', borderRadius: '8px',
                     background: isActive ? info.bg : '#f9fafb',
                     color: isActive ? info.color : '#6b7280',
                     border: isActive ? `2px solid ${info.color}` : '1px solid #e5e7eb',
                     fontWeight: 700, cursor: 'pointer', fontSize: '13px',
-                  }}>
-                    {info.label}
-                  </button>
+                  }}>{info.label}</button>
                 );
               })}
             </div>
           </div>
 
-          {/* Repetition Info */}
-          {repInfo && (
-            <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '12px 16px', border: '1px solid #bfdbfe' }}>
+          {/* Violation Text from catalog */}
+          {filteredViolTypes.length > 0 && (
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نص المخالفة (من اللائحة)</label>
+              <select value={selectedViolCode} onChange={(e) => {
+                setSelectedViolCode(e.target.value);
+                const vt = filteredViolTypes.find((t) => t.code === e.target.value);
+                if (vt) setDescription(vt.description);
+              }}
+                style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff', boxSizing: 'border-box' }}>
+                <option value="">اختر من القائمة...</option>
+                {filteredViolTypes.map((t) => (
+                  <option key={t.id} value={t.code}>{t.code} - {t.description}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Repetition Info (single mode only) */}
+          {!batchMode && repInfo && (
+            <div style={{ background: repInfo.nextRepetition > 1 ? '#fff7ed' : '#eff6ff', borderRadius: '8px', padding: '12px 16px', border: `1px solid ${repInfo.nextRepetition > 1 ? '#fed7aa' : '#bfdbfe'}` }}>
+              {repInfo.nextRepetition > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: '#c2410c', fontWeight: 700, fontSize: '14px' }}>
+                  ⚠️ تنبيه تكرار! هذه المخالفة تكررت للمرة {repInfo.nextRepetition}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '24px', fontSize: '14px' }}>
-                <div>
-                  <span style={{ color: '#6b7280' }}>التكرار: </span>
-                  <span style={{ fontWeight: 700, color: '#1e40af' }}>{repInfo.nextRepetition}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#6b7280' }}>الحسم التلقائي: </span>
-                  <span style={{ fontWeight: 700, color: '#dc2626' }}>{repInfo.deduction} درجة</span>
-                </div>
+                <div><span style={{ color: '#6b7280' }}>التكرار: </span><span style={{ fontWeight: 700, color: '#1e40af' }}>{repInfo.nextRepetition}</span></div>
+                <div><span style={{ color: '#6b7280' }}>الحسم التلقائي: </span><span style={{ fontWeight: 700, color: '#dc2626' }}>{repInfo.deduction} درجة</span></div>
               </div>
               {repInfo.procedures.length > 0 && (
                 <div style={{ marginTop: '8px' }}>
@@ -1841,42 +1998,15 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
               )}
             </div>
           )}
-
-          {/* Violation Type Selector */}
-          {filteredViolTypes.length > 0 && (
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نص المخالفة (من القائمة)</label>
-              <select onChange={(e) => { if (e.target.value) setDescription(e.target.value); }}
-                style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff', boxSizing: 'border-box' }}>
-                <option value="">اختر من القائمة...</option>
-                {filteredViolTypes.map((t) => (
-                  <option key={t.id} value={t.description}>{t.code} - {t.description}</option>
-                ))}
-              </select>
+          {batchMode && selectedStudents.length > 1 && (
+            <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '10px 16px', border: '1px solid #bfdbfe', fontSize: '13px', color: '#1e40af' }}>
+              👥 تم اختيار <strong>{selectedStudents.length}</strong> طالب — سيتم حساب مستوى التكرار لكل طالب تلقائياً عند الحفظ
             </div>
           )}
 
-          {/* Type */}
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '8px' }}>نوع المخالفة</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {Object.entries(TYPE_LABELS).map(([key, label]) => (
-                <button key={key} onClick={() => setViolationType(key)} style={{
-                  flex: 1, padding: '8px', borderRadius: '8px',
-                  background: violationType === key ? '#eef2ff' : '#f9fafb',
-                  color: violationType === key ? '#4338ca' : '#6b7280',
-                  border: violationType === key ? '2px solid #4f46e5' : '1px solid #e5e7eb',
-                  fontWeight: 600, cursor: 'pointer', fontSize: '13px',
-                }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Description */}
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '4px' }}>وصف المخالفة *</label>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '4px' }}>وصف المخالفة {!batchMode && '*'}</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
               placeholder="وصف المخالفة..."
               style={{ width: '100%', padding: '10px 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box' }} />
@@ -1885,21 +2015,25 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
           {/* Notes */}
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#4b5563', marginBottom: '4px' }}>ملاحظات</label>
-            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
-              placeholder="ملاحظات إضافية (اختياري)"
+            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="ملاحظات إضافية (اختياري)"
               style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
-          <button onClick={handleSave} disabled={saving} style={{
-            padding: '8px 24px', background: '#dc2626', color: '#fff',
-            borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer', opacity: saving ? 0.7 : 1,
-          }}>
-            {saving ? 'جاري التسجيل...' : 'تسجيل المخالفة'}
-          </button>
+        <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+            {batchMode ? `${selectedStudents.length} طالب محدد` : (selectedStudent ? selectedStudent.name : 'لم يتم اختيار طالب')}
+          </span>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
+            <button onClick={handleSave} disabled={saving} style={{
+              padding: '8px 24px', background: '#dc2626', color: '#fff',
+              borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer', opacity: saving ? 0.7 : 1,
+            }}>
+              {saving ? 'جاري التسجيل...' : batchMode ? `تسجيل لـ ${selectedStudents.length} طالب` : 'تسجيل المخالفة'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
