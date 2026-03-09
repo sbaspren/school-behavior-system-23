@@ -5,6 +5,7 @@ import { settingsApi, StageConfigData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
 import { printForm } from '../utils/printTemplates';
+import { printDailyReport } from '../utils/printDaily';
 
 const TARDINESS_TYPES: Record<string, { label: string; color: string; bg: string }> = {
   Morning: { label: 'تأخر صباحي', color: '#dc2626', bg: '#fee2e2' },
@@ -49,6 +50,7 @@ const TardinessPage: React.FC = () => {
   const [stageFilter, setStageFilter] = useState('__all__');
   const [activeTab, setActiveTab] = useState<TabType>('today');
   const [modalOpen, setModalOpen] = useState(false);
+  const [schoolSettings, setSchoolSettings] = useState<Record<string, string>>({});
 
   const enabledStages = useMemo(() =>
     stages.filter((s) => s.isEnabled && s.grades.some((g) => g.isEnabled && g.classCount > 0)),
@@ -58,12 +60,14 @@ const TardinessPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [rRes, sRes] = await Promise.all([
+      const [rRes, sRes, seRes] = await Promise.all([
         tardinessApi.getAll(),
         settingsApi.getStructure(),
+        settingsApi.getSettings(),
       ]);
       if (rRes.data?.data) setRecords(rRes.data.data);
       if (sRes.data?.data?.stages) setStages(Array.isArray(sRes.data.data.stages) ? sRes.data.data.stages : []);
+      if (seRes.data?.data) setSchoolSettings(seRes.data.data);
     } catch { /* empty */ }
     finally { setLoading(false); }
   }, []);
@@ -155,8 +159,8 @@ const TardinessPage: React.FC = () => {
         ))}
       </div>
 
-      {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} />}
-      {activeTab === 'approved' && <ApprovedTab records={filteredByStage} onRefresh={loadData} />}
+      {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} schoolSettings={schoolSettings} />}
+      {activeTab === 'approved' && <ApprovedTab records={filteredByStage} onRefresh={loadData} schoolSettings={schoolSettings} />}
       {activeTab === 'reports' && <ReportsTab records={filteredByStage} />}
 
       {modalOpen && <AddTardinessModal stages={enabledStages} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); loadData(); }} />}
@@ -171,7 +175,8 @@ const TodayTab: React.FC<{
   records: TardinessRow[];
   onRefresh: () => void;
   stageFilter: string;
-}> = ({ records, onRefresh, stageFilter }) => {
+  schoolSettings: Record<string, string>;
+}> = ({ records, onRefresh, stageFilter, schoolSettings }) => {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -242,17 +247,10 @@ const TodayTab: React.FC<{
   };
 
   const handlePrintToday = () => {
-    const pw = window.open('', '_blank');
-    if (!pw) return;
-    const rows = filtered.map((r, i) => {
-      const tt = TARDINESS_TYPES[r.tardinessType] || { label: r.tardinessType };
-      return `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.studentNumber}</td><td>${r.grade} (${r.className})</td><td>${tt.label}</td><td>${r.period || '-'}</td><td>${r.isSent ? 'نعم' : 'لا'}</td></tr>`;
-    }).join('');
-    pw.document.write(`<html dir="rtl"><head><title>كشف التأخر اليومي</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>كشف التأخر اليومي</h2><p style="text-align:center">عدد المتأخرين: ${filtered.length}</p>
-      <table><thead><tr><th>#</th><th>الطالب</th><th>الرقم</th><th>الصف</th><th>النوع</th><th>الحصة</th><th>إرسال</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
+    const toPrint = selected.size > 0 ? filtered.filter(r => selected.has(r.id)) : filtered;
+    if (toPrint.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
+    const stage = stageFilter !== '__all__' ? (SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter) : undefined;
+    printDailyReport('tardiness', toPrint as unknown as Record<string, unknown>[], schoolSettings as any, stage);
   };
 
   return (
@@ -404,7 +402,8 @@ const MessageEditorModal: React.FC<{
 const ApprovedTab: React.FC<{
   records: TardinessRow[];
   onRefresh: () => void;
-}> = ({ records, onRefresh }) => {
+  schoolSettings: Record<string, string>;
+}> = ({ records, onRefresh, schoolSettings }) => {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
@@ -448,22 +447,8 @@ const ApprovedTab: React.FC<{
   }, [records, typeFilter, gradeFilter, classFilter, dateFrom, dateTo, search]);
 
   const handlePrintArchive = () => {
-    const pw = window.open('', '_blank');
-    if (!pw) return;
-    let prevClass = '';
-    const rows = allFilteredRecords.map((r, i) => {
-      const tt = TARDINESS_TYPES[r.tardinessType] || { label: r.tardinessType };
-      const classKey = `${r.grade} (${r.className})`;
-      let separator = '';
-      if (classKey !== prevClass) { prevClass = classKey; separator = `<tr style="background:#f0f0f0;font-weight:700"><td colspan="7">${classKey}</td></tr>`; }
-      return `${separator}<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.studentNumber}</td><td>${tt.label}</td><td>${r.period || '-'}</td><td>${r.hijriDate}</td><td>${r.isSent ? 'نعم' : 'لا'}</td></tr>`;
-    }).join('');
-    const dateRange = dateFrom || dateTo ? `<p style="text-align:center">الفترة: ${dateFrom || '...'} إلى ${dateTo || '...'}</p>` : '';
-    pw.document.write(`<html dir="rtl"><head><title>سجل التأخر التراكمي</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#e5e7eb}h2{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>سجل التأخر التراكمي</h2>${dateRange}<p style="text-align:center">عدد السجلات: ${allFilteredRecords.length} | عدد الطلاب: ${studentGroups.length}</p>
-      <table><thead><tr><th>#</th><th>الطالب</th><th>الرقم</th><th>النوع</th><th>الحصة</th><th>التاريخ</th><th>إرسال</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
+    if (allFilteredRecords.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
+    printDailyReport('tardiness', allFilteredRecords as unknown as Record<string, unknown>[], schoolSettings as any);
   };
 
   return (

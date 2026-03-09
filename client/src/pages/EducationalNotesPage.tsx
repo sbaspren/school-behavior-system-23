@@ -5,6 +5,8 @@ import { settingsApi, StageConfigData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
 import { printForm } from '../utils/printTemplates';
+import { printDailyReport } from '../utils/printDaily';
+import { sortByClass } from '../utils/printUtils';
 
 const THEME = '#059669'; // emerald-600
 
@@ -57,6 +59,7 @@ const EducationalNotesPage: React.FC = () => {
   const [currentStage, setCurrentStage] = useState('');
   const [noteTypes, setNoteTypes] = useState<string[]>([]);
   const [stats, setStats] = useState<DailyStats>({ todayCount: 0, totalCount: 0, unsentCount: 0, sentCount: 0 });
+  const [schoolSettings, setSchoolSettings] = useState<Record<string, string>>({});
 
   const enabledStages = useMemo(() =>
     stages.filter(s => s.isEnabled && s.grades.some(g => g.isEnabled && g.classCount > 0)),
@@ -71,6 +74,9 @@ const EducationalNotesPage: React.FC = () => {
         const enabled = st.filter((s: StageConfigData) => s.isEnabled && s.grades.some((g: { isEnabled: boolean; classCount: number }) => g.isEnabled && g.classCount > 0));
         if (enabled.length > 0) setCurrentStage(enabled[0].stage);
       }
+    });
+    settingsApi.getSettings().then(res => {
+      if (res.data?.data) setSchoolSettings(res.data.data);
     });
   }, []);
 
@@ -143,8 +149,8 @@ const EducationalNotesPage: React.FC = () => {
         ))}
       </div>
 
-      {activeTab === 'today' && <TodayTab stage={currentStage} noteTypes={noteTypes} onRefresh={refreshStats} />}
-      {activeTab === 'approved' && <ApprovedTab stage={currentStage} noteTypes={noteTypes} />}
+      {activeTab === 'today' && <TodayTab stage={currentStage} noteTypes={noteTypes} onRefresh={refreshStats} schoolSettings={schoolSettings} />}
+      {activeTab === 'approved' && <ApprovedTab stage={currentStage} noteTypes={noteTypes} schoolSettings={schoolSettings} />}
       {activeTab === 'reports' && <ReportsTab stage={currentStage} />}
     </div>
   );
@@ -159,7 +165,7 @@ const HeroStat: React.FC<{ label: string; value: number }> = ({ label, value }) 
 );
 
 // ────────────────────────── TODAY TAB ──────────────────────────
-const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => void }> = ({ stage, noteTypes, onRefresh }) => {
+const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => void; schoolSettings: Record<string, string> }> = ({ stage, noteTypes, onRefresh, schoolSettings }) => {
   const [records, setRecords] = useState<NoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -264,13 +270,12 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
 
   const printToday = () => {
     if (records.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
-    const w = window.open('', '_blank');
-    if (!w) return;
-    const rows = records.map((r, i) => `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.grade} / ${r.className}</td><td>${r.noteType}</td><td>${r.details || '-'}</td><td>${r.teacherName || '-'}</td><td style="color:${r.isSent ? 'green' : '#999'};font-weight:bold">${r.isSent ? 'تم' : '-'}</td></tr>`).join('');
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>الملاحظات التربوية</title><style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right;font-size:13px}th{background:#059669;color:#fff}</style></head><body><h2 style="text-align:center">سجل الملاحظات التربوية اليومي</h2><table><thead><tr><th>م</th><th>اسم الطالب</th><th>الصف</th><th>نوع الملاحظة</th><th>التفاصيل</th><th>المسجل</th><th>التواصل</th></tr></thead><tbody>${rows}</tbody></table><p style="text-align:center;margin-top:16px">${records.length} ملاحظة</p></body></html>`);
-    w.document.close();
-    setTimeout(() => w.print(), 300);
+    const toPrint = selected.size > 0 ? records.filter(r => selected.has(r.id)) : records;
+    printDailyReport('notes', toPrint as unknown as Record<string, unknown>[], schoolSettings as any, stage);
   };
+
+  // ترتيب حسب الصف
+  const sortedRecords = useMemo(() => sortByClass(records, 'studentName' as keyof NoteRow, 'grade' as keyof NoteRow, 'className' as keyof NoteRow), [records]);
 
   return (
     <div>
@@ -317,7 +322,7 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
               </tr>
             </thead>
             <tbody>
-              {records.map((r, i) => (
+              {sortedRecords.map((r, i) => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                   <td style={tdStyle}><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} /></td>
                   <td style={tdStyle}>{i + 1}</td>
@@ -393,7 +398,7 @@ const EduMsgEditor: React.FC<{ record: NoteRow; onSend: (msg: string) => void; o
 };
 
 // ────────────────────────── APPROVED TAB ──────────────────────────
-const ApprovedTab: React.FC<{ stage: string; noteTypes: string[] }> = ({ stage, noteTypes }) => {
+const ApprovedTab: React.FC<{ stage: string; noteTypes: string[]; schoolSettings: Record<string, string> }> = ({ stage, noteTypes, schoolSettings }) => {
   const [records, setRecords] = useState<NoteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -450,12 +455,7 @@ const ApprovedTab: React.FC<{ stage: string; noteTypes: string[] }> = ({ stage, 
 
   const printList = () => {
     if (filtered.length === 0) { showError('لا توجد بيانات للطباعة'); return; }
-    const w = window.open('', '_blank');
-    if (!w) return;
-    const rows = filtered.map((r, i) => `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.grade} / ${r.className}</td><td>${r.noteType}</td><td>${r.details || '-'}</td><td>${r.teacherName || '-'}</td><td>${r.hijriDate || '-'}</td></tr>`).join('');
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>سجل الملاحظات</title><style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right;font-size:13px}th{background:#059669;color:#fff}</style></head><body><h2 style="text-align:center">سجل الملاحظات التربوية</h2><table><thead><tr><th>م</th><th>الطالب</th><th>الصف</th><th>النوع</th><th>التفاصيل</th><th>المسجل</th><th>التاريخ</th></tr></thead><tbody>${rows}</tbody></table><p style="text-align:center;margin-top:16px">${filtered.length} ملاحظة</p></body></html>`);
-    w.document.close();
-    setTimeout(() => w.print(), 300);
+    printDailyReport('notes', filtered as unknown as Record<string, unknown>[], schoolSettings as any, stage);
   };
 
   return (

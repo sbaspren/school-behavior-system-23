@@ -5,6 +5,7 @@ import { settingsApi, StageConfigData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
 import { printForm } from '../utils/printTemplates';
+import { printDailyReport } from '../utils/printDaily';
 
 const REASONS = ['مرض', 'مراجعة طبية', 'ظروف عائلية', 'مراجعة حكومية', 'أخرى'];
 
@@ -27,6 +28,7 @@ const PermissionsPage: React.FC = () => {
   const [stageFilter, setStageFilter] = useState('__all__');
   const [activeTab, setActiveTab] = useState<TabType>('today');
   const [modalOpen, setModalOpen] = useState(false);
+  const [schoolSettings, setSchoolSettings] = useState<Record<string, string>>({});
 
   const enabledStages = useMemo(() =>
     stages.filter((s) => s.isEnabled && s.grades.some((g) => g.isEnabled && g.classCount > 0)), [stages]);
@@ -34,9 +36,10 @@ const PermissionsPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [rRes, sRes] = await Promise.all([permissionsApi.getAll(), settingsApi.getStructure()]);
+      const [rRes, sRes, seRes] = await Promise.all([permissionsApi.getAll(), settingsApi.getStructure(), settingsApi.getSettings()]);
       if (rRes.data?.data) setRecords(rRes.data.data);
       if (sRes.data?.data?.stages) setStages(Array.isArray(sRes.data.data.stages) ? sRes.data.data.stages : []);
+      if (seRes.data?.data) setSchoolSettings(seRes.data.data);
     } catch { /* empty */ }
     finally { setLoading(false); }
   }, []);
@@ -116,8 +119,8 @@ const PermissionsPage: React.FC = () => {
         ))}
       </div>
 
-      {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} />}
-      {activeTab === 'approved' && <ApprovedTab records={filteredByStage} onRefresh={loadData} />}
+      {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} schoolSettings={schoolSettings} />}
+      {activeTab === 'approved' && <ApprovedTab records={filteredByStage} onRefresh={loadData} schoolSettings={schoolSettings} />}
       {activeTab === 'reports' && <ReportsTab records={filteredByStage} />}
 
       {modalOpen && <AddPermissionModal stages={enabledStages} onClose={() => setModalOpen(false)} onSaved={() => { setModalOpen(false); loadData(); }} />}
@@ -128,7 +131,7 @@ const PermissionsPage: React.FC = () => {
 // ============================================================
 // Today Tab
 // ============================================================
-const TodayTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void; stageFilter: string }> = ({ records, onRefresh, stageFilter }) => {
+const TodayTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void; stageFilter: string; schoolSettings: Record<string, string> }> = ({ records, onRefresh, stageFilter, schoolSettings }) => {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<PermissionRow | null>(null);
@@ -183,14 +186,10 @@ const TodayTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void; stag
   };
 
   const handlePrint = () => {
-    const pw = window.open('', '_blank');
-    if (!pw) return;
-    const rows = filtered.map((r, i) => `<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.studentNumber}</td><td>${r.grade} (${r.className})</td><td>${r.exitTime}</td><td>${r.reason}</td><td>${r.receiver}</td><td>${r.confirmationTime || 'بانتظار'}</td></tr>`).join('');
-    pw.document.write(`<html dir="rtl"><head><title>كشف الاستئذان اليومي</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>كشف الاستئذان اليومي</h2><p style="text-align:center">العدد: ${filtered.length}</p>
-      <table><thead><tr><th>#</th><th>الطالب</th><th>الرقم</th><th>الصف</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التأكيد</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
+    const toPrint = selected.size > 0 ? filtered.filter(r => selected.has(r.id)) : filtered;
+    if (toPrint.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
+    const stage = stageFilter !== '__all__' ? (SETTINGS_STAGES.find((s) => s.name === stageFilter)?.id || stageFilter) : undefined;
+    printDailyReport('permissions', toPrint as unknown as Record<string, unknown>[], schoolSettings as any, stage);
   };
 
   return (
@@ -302,7 +301,7 @@ const PermMsgEditorModal: React.FC<{ record: PermissionRow; onSend: (message: st
 // ============================================================
 // Approved Tab
 // ============================================================
-const ApprovedTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void }> = ({ records, onRefresh }) => {
+const ApprovedTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void; schoolSettings: Record<string, string> }> = ({ records, onRefresh, schoolSettings }) => {
   const [search, setSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
@@ -341,21 +340,8 @@ const ApprovedTab: React.FC<{ records: PermissionRow[]; onRefresh: () => void }>
   const reasons = useMemo(() => Array.from(new Set(records.map((r) => r.reason).filter(Boolean))).sort(), [records]);
 
   const handlePrintArchive = () => {
-    const pw = window.open('', '_blank');
-    if (!pw) return;
-    let prevClass = '';
-    const rows = allFilteredRecords.map((r, i) => {
-      const classKey = `${r.grade} (${r.className})`;
-      let separator = '';
-      if (classKey !== prevClass) { prevClass = classKey; separator = `<tr style="background:#f0f0f0;font-weight:700"><td colspan="8">${classKey}</td></tr>`; }
-      return `${separator}<tr><td>${i + 1}</td><td>${r.studentName}</td><td>${r.exitTime || '-'}</td><td>${r.reason || '-'}</td><td>${r.receiver || '-'}</td><td>${r.hijriDate}</td><td>${r.confirmationTime || 'بانتظار'}</td><td>${r.isSent ? 'نعم' : 'لا'}</td></tr>`;
-    }).join('');
-    const dateRange = dateFrom || dateTo ? `<p style="text-align:center">الفترة: ${dateFrom || '...'} إلى ${dateTo || '...'}</p>` : '';
-    pw.document.write(`<html dir="rtl"><head><title>سجل الاستئذان التراكمي</title>
-      <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#e5e7eb}h2{text-align:center}@media print{body{padding:15px}}</style></head>
-      <body><h2>سجل الاستئذان التراكمي</h2>${dateRange}<p style="text-align:center">عدد السجلات: ${allFilteredRecords.length} | عدد الطلاب: ${studentGroups.length}</p>
-      <table><thead><tr><th>#</th><th>الطالب</th><th>وقت الخروج</th><th>السبب</th><th>المستلم</th><th>التاريخ</th><th>التأكيد</th><th>إرسال</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
-    pw.document.close(); pw.print();
+    if (allFilteredRecords.length === 0) { showError('لا يوجد بيانات للطباعة'); return; }
+    printDailyReport('permissions', allFilteredRecords as unknown as Record<string, unknown>[], schoolSettings as any);
   };
 
   return (
