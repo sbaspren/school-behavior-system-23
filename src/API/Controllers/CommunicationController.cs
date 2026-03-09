@@ -147,6 +147,39 @@ public class CommunicationController : ControllerBase
         return Ok(ApiResponse.Ok());
     }
 
+    [HttpPut("{id}/mark-original-sent")]
+    public async Task<ActionResult<ApiResponse>> MarkOriginalRecordSent(int id, [FromBody] MarkOriginalSentRequest request)
+    {
+        // تحديث حالة الإرسال في السجل الأصلي (مخالفة/غياب/تأخر)
+        try
+        {
+            switch (request.Section?.ToLower())
+            {
+                case "violations":
+                    var viol = await _db.Violations.FindAsync(request.OriginalRecordId);
+                    if (viol != null) { viol.IsSent = true; await _db.SaveChangesAsync(); }
+                    break;
+                case "absence":
+                    var abs = await _db.DailyAbsences.FindAsync(request.OriginalRecordId);
+                    if (abs != null) { abs.IsSent = true; await _db.SaveChangesAsync(); }
+                    break;
+                case "tardiness":
+                    var tard = await _db.TardinessRecords.FindAsync(request.OriginalRecordId);
+                    if (tard != null) { tard.IsSent = true; await _db.SaveChangesAsync(); }
+                    break;
+                case "educational-notes":
+                    var note = await _db.EducationalNotes.FindAsync(request.OriginalRecordId);
+                    if (note != null) { note.IsSent = true; await _db.SaveChangesAsync(); }
+                    break;
+            }
+            return Ok(ApiResponse.Ok());
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse.Fail(ex.Message));
+        }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult<ApiResponse>> Delete(int id)
     {
@@ -303,4 +336,10 @@ public class AddSessionRequest
     public string? PhoneNumber { get; set; }
     public string? Stage { get; set; }
     public string? UserType { get; set; }
+}
+
+public class MarkOriginalSentRequest
+{
+    public int OriginalRecordId { get; set; }
+    public string? Section { get; set; } // violations, absence, tardiness, educational-notes
 }
