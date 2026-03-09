@@ -576,6 +576,8 @@ const ApprovedTab: React.FC<{
   const [dateTo, setDateTo] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [detailStudent, setDetailStudent] = useState<{ studentId: number; studentName: string } | null>(null);
+  const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
+  const [sendingAll, setSendingAll] = useState(false);
 
   // Filtered flat list (for print)
   const allFilteredRecords = useMemo(() => {
@@ -621,6 +623,71 @@ const ApprovedTab: React.FC<{
     pw.document.close(); pw.print();
   };
 
+  // إرسال كل غير المرسلين (sendApprovedViolations)
+  const handleSendAllUnsent = async () => {
+    const unsent = allFilteredRecords.filter((v) => !v.isSent);
+    if (unsent.length === 0) { showError('جميع المخالفات تم إرسالها'); return; }
+    if (!window.confirm(`سيتم إرسال ${unsent.length} إشعار واتساب. متابعة؟`)) return;
+    setSendingAll(true);
+    try {
+      const res = await violationsApi.sendWhatsAppBulk(unsent.map((v) => v.id));
+      if (res.data?.data) {
+        showSuccess(`تم إرسال ${res.data.data.sentCount} من ${res.data.data.total} | فشل: ${res.data.data.failedCount}`);
+        onRefresh();
+      }
+    } catch { showError('خطأ في الإرسال'); }
+    finally { setSendingAll(false); }
+  };
+
+  // إرسال واتساب جماعي للمحددين (violBulkSendWhatsApp)
+  const handleBulkSendWhatsApp = async () => {
+    if (bulkSelected.size === 0) { showError('يرجى تحديد مخالفات أولاً'); return; }
+    const unsent = Array.from(bulkSelected).filter((id) => { const v = violations.find((x) => x.id === id); return v && !v.isSent; });
+    if (unsent.length === 0) { showError('جميع المحددين تم إرسالهم'); return; }
+    try {
+      const res = await violationsApi.sendWhatsAppBulk(unsent);
+      if (res.data?.data) {
+        showSuccess(`تم إرسال ${res.data.data.sentCount} رسالة`);
+        setBulkSelected(new Set());
+        onRefresh();
+      }
+    } catch { showError('خطأ في الإرسال'); }
+  };
+
+  // إرسال بطاقة مخالفات طالب (sendViolCardWhatsApp)
+  const handleSendStudentCard = async (studentId: number) => {
+    const studentViols = violations.filter((v) => v.studentId === studentId && !v.isSent);
+    if (studentViols.length === 0) { showError('تم إرسال جميع مخالفات هذا الطالب'); return; }
+    try {
+      const res = await violationsApi.sendWhatsAppBulk(studentViols.map((v) => v.id));
+      if (res.data?.data) { showSuccess(`تم إرسال ${res.data.data.sentCount} رسالة`); onRefresh(); }
+    } catch { showError('خطأ في الإرسال'); }
+  };
+
+  // تقرير التواصل (printViolContactReport)
+  const handlePrintContactReport = () => {
+    const sent = allFilteredRecords.filter((v) => v.isSent);
+    if (sent.length === 0) { showError('لا يوجد سجلات تم إرسالها'); return; }
+    const toIndic = (n: string | number) => String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)]);
+    const hijri = new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' });
+    const degLabel: Record<number, string> = { 1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة' };
+    const rows = sent.map((r, i) => `<tr><td>${toIndic(i + 1)}</td><td style="font-weight:bold">${r.studentName}</td><td>${r.grade} (${r.className})</td><td>${r.description}</td><td>${degLabel[r.degree] || r.degree}</td><td>${toIndic(r.hijriDate || '')}</td><td style="color:green;font-weight:bold">تم</td></tr>`).join('');
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<html dir="rtl"><head><title>تقرير التواصل</title><style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#e5e7eb}h2{text-align:center}@media print{body{padding:15px}}</style></head><body><h2>تقرير التواصل مع أولياء الأمور</h2><p style="text-align:center">المخالفات السلوكية — ${hijri} | عدد السجلات: ${toIndic(sent.length)}</p><table><thead><tr><th>م</th><th>اسم الطالب</th><th>الصف</th><th>المخالفة</th><th>الدرجة</th><th>التاريخ</th><th>التواصل</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 300);
+  };
+
+  // Bulk toggle
+  const toggleBulkSelect = (id: number) => {
+    setBulkSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const toggleBulkSelectAll = () => {
+    if (bulkSelected.size === allFilteredRecords.length) setBulkSelected(new Set());
+    else setBulkSelected(new Set(allFilteredRecords.map((v) => v.id)));
+  };
+
   return (
     <>
       {/* Filters */}
@@ -648,6 +715,10 @@ const ApprovedTab: React.FC<{
           <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#dc2626' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>📋 جدول</button>
         </div>
         <button onClick={handlePrintArchive} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
+        <button onClick={handleSendAllUnsent} disabled={sendingAll} style={{ height: '38px', padding: '0 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px', opacity: sendingAll ? 0.6 : 1 }}>
+          {sendingAll ? '⏳ جاري...' : '📱 إرسال الكل'}
+        </button>
+        <button onClick={handlePrintContactReport} style={{ height: '38px', padding: '0 16px', background: '#0d9488', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📞 تقرير التواصل</button>
       </div>
 
       {/* Quick Degree Filter Buttons */}
@@ -717,6 +788,12 @@ const ApprovedTab: React.FC<{
                   <span style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '12px', background: '#fee2e2', color: '#dc2626' }}>
                     حسم: {totalDeduction}
                   </span>
+                  {(() => { const unsent = vList.filter((v) => !v.isSent).length; return unsent > 0 ? (
+                    <button onClick={(e) => { e.stopPropagation(); handleSendStudentCard(student.studentId); }}
+                      style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '12px', background: '#dcfce7', color: '#15803d', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                      📱 إرسال ({unsent})
+                    </button>
+                  ) : null; })()}
                   {[1, 2, 3, 4, 5].map((d) => {
                     const count = vList.filter((v) => v.degree === d).length;
                     if (count === 0) return null;
@@ -738,6 +815,7 @@ const ApprovedTab: React.FC<{
             <table className="data-table">
               <thead>
                 <tr>
+                  <th style={{ width: '36px' }}><input type="checkbox" checked={bulkSelected.size === allFilteredRecords.length && allFilteredRecords.length > 0} onChange={toggleBulkSelectAll} /></th>
                   <th>الطالب</th>
                   <th>الصف</th>
                   <th>عدد المخالفات</th>
@@ -754,6 +832,14 @@ const ApprovedTab: React.FC<{
                   const scoreColor = behaviorScore >= 80 ? '#15803d' : behaviorScore >= 60 ? '#ca8a04' : behaviorScore >= 40 ? '#ea580c' : '#dc2626';
                   return (
                     <tr key={student.studentId}>
+                      <td><input type="checkbox" checked={vList.every((v) => bulkSelected.has(v.id))} onChange={() => {
+                        setBulkSelected((prev) => {
+                          const next = new Set(prev);
+                          const allSel = vList.every((v) => next.has(v.id));
+                          vList.forEach((v) => { if (allSel) next.delete(v.id); else next.add(v.id); });
+                          return next;
+                        });
+                      }} /></td>
                       <td style={{ fontWeight: 700 }}>{student.studentName}</td>
                       <td>{student.grade} ({student.className})</td>
                       <td style={{ fontWeight: 700 }}>{vList.length}</td>
@@ -780,6 +866,20 @@ const ApprovedTab: React.FC<{
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Action Bar */}
+      {bulkSelected.size > 0 && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#1f2937', color: '#fff', padding: '12px 24px', zIndex: 40, boxShadow: '0 -4px 20px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: '#818cf8' }}>{bulkSelected.size}</span>
+            <span style={{ fontSize: '14px', color: '#d1d5db' }}>مخالفة محددة</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={handleBulkSendWhatsApp} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📱 واتساب</button>
+            <button onClick={() => setBulkSelected(new Set())} style={{ padding: '6px 12px', background: '#374151', color: '#d1d5db', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>✕</button>
           </div>
         </div>
       )}
@@ -1170,6 +1270,7 @@ const CompensationTab: React.FC<{
 }> = ({ violations, stageFilter }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'compensated'>('all');
+  const [gradeFilter, setGradeFilter] = useState('');
   const [posRecords, setPosRecords] = useState<PosRecord[]>([]);
   const [loadingPos, setLoadingPos] = useState(true);
   const [compensateModal, setCompensateModal] = useState<ViolationRow | null>(null);
@@ -1220,12 +1321,15 @@ const CompensationTab: React.FC<{
     let list = eligibleViolations;
     if (statusFilter === 'pending') list = list.filter((v) => !compensatedSet.has(v.id));
     if (statusFilter === 'compensated') list = list.filter((v) => compensatedSet.has(v.id));
+    if (gradeFilter) list = list.filter((v) => v.grade === gradeFilter);
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((v) => v.studentName.toLowerCase().includes(q) || v.studentNumber.includes(q));
     }
     return list;
-  }, [eligibleViolations, compensatedSet, statusFilter, search]);
+  }, [eligibleViolations, compensatedSet, statusFilter, gradeFilter, search]);
+
+  const compGrades = useMemo(() => Array.from(new Set(eligibleViolations.map((v) => v.grade))).sort(), [eligibleViolations]);
 
   const pendingCount = eligibleViolations.filter((v) => !compensatedSet.has(v.id)).length;
   const compensatedCount = eligibleViolations.filter((v) => compensatedSet.has(v.id)).length;
@@ -1272,6 +1376,11 @@ const CompensationTab: React.FC<{
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="بحث بالاسم أو رقم الطالب..."
           style={{ flex: 1, minWidth: '200px', height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px' }} />
+        <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}
+          style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '12px', fontSize: '14px', background: '#fff' }}>
+          <option value="">كل الصفوف</option>
+          {compGrades.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
         <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '2px' }}>
           {[
             { id: 'all' as const, label: 'الكل' },
@@ -1390,12 +1499,32 @@ const ReportsTab: React.FC<{
   violations: ViolationRow[];
   stageFilter: string;
 }> = ({ violations, stageFilter }) => {
-  const totalDeduction = violations.reduce((s, v) => s + v.deduction, 0);
+  const [repGrade, setRepGrade] = useState('');
+  const [repClass, setRepClass] = useState('');
+  const [repDateFrom, setRepDateFrom] = useState('');
+  const [repDateTo, setRepDateTo] = useState('');
+
+  const repGrades = useMemo(() => Array.from(new Set(violations.map((v) => v.grade))).sort(), [violations]);
+  const repClasses = useMemo(() => {
+    if (!repGrade) return [];
+    return Array.from(new Set(violations.filter((v) => v.grade === repGrade).map((v) => v.className))).sort();
+  }, [violations, repGrade]);
+
+  const filteredViols = useMemo(() => {
+    let list = violations;
+    if (repGrade) list = list.filter((v) => v.grade === repGrade);
+    if (repClass) list = list.filter((v) => v.className === repClass);
+    if (repDateFrom) list = list.filter((v) => v.miladiDate >= repDateFrom);
+    if (repDateTo) list = list.filter((v) => v.miladiDate <= repDateTo);
+    return list;
+  }, [violations, repGrade, repClass, repDateFrom, repDateTo]);
+
+  const totalDeduction = filteredViols.reduce((s, v) => s + v.deduction, 0);
 
   // Top students
   const topStudents = useMemo(() => {
     const groups = new Map<number, { name: string; grade: string; cls: string; count: number; deduction: number }>();
-    for (const v of violations) {
+    for (const v of filteredViols) {
       const g = groups.get(v.studentId) || { name: v.studentName, grade: v.grade, cls: v.className, count: 0, deduction: 0 };
       g.count++;
       g.deduction += v.deduction;
@@ -1405,29 +1534,29 @@ const ReportsTab: React.FC<{
       .map(([id, g]) => ({ id, ...g, score: Math.max(0, 100 - g.deduction) }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
-  }, [violations]);
+  }, [filteredViols]);
 
   // By class
   const byClass = useMemo(() => {
     const groups = new Map<string, number>();
-    for (const v of violations) {
+    for (const v of filteredViols) {
       const key = `${v.grade} (${v.className})`;
       groups.set(key, (groups.get(key) || 0) + 1);
     }
     return Array.from(groups.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [violations]);
+  }, [filteredViols]);
 
   // By degree
   const byDegree = useMemo(() =>
     [1, 2, 3, 4, 5].map((d) => ({
       degree: d,
       label: DEGREE_LABELS[d].label,
-      count: violations.filter((v) => v.degree === d).length,
-      deduction: violations.filter((v) => v.degree === d).reduce((s, v) => s + v.deduction, 0),
+      count: filteredViols.filter((v) => v.degree === d).length,
+      deduction: filteredViols.filter((v) => v.degree === d).reduce((s, v) => s + v.deduction, 0),
       color: DEGREE_LABELS[d].color,
       bg: DEGREE_LABELS[d].bg,
     })),
-    [violations]
+    [filteredViols]
   );
 
   const maxByClass = Math.max(...byClass.map((c) => c.count), 1);
@@ -1443,7 +1572,7 @@ const ReportsTab: React.FC<{
       <html dir="rtl"><head><title>تقرير المخالفات</title>
       <style>body{font-family:Tahoma,'IBM Plex Sans Arabic',Arial;padding:30px;direction:rtl}table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}h2,h3{text-align:center}@media print{body{padding:15px}}</style></head>
       <body><h2>تقرير المخالفات السلوكية</h2>
-      <p style="text-align:center">إجمالي المخالفات: <strong>${violations.length}</strong> | إجمالي الحسم: <strong>${totalDeduction}</strong></p>
+      <p style="text-align:center">إجمالي المخالفات: <strong>${filteredViols.length}</strong> | إجمالي الحسم: <strong>${totalDeduction}</strong></p>
       <h3>التوزيع حسب الدرجة</h3>
       <table><thead><tr><th>الدرجة</th><th>العدد</th><th>الحسم</th></tr></thead><tbody>${degreeRows}</tbody></table>
       <h3>التوزيع حسب الفصل</h3>
@@ -1458,15 +1587,42 @@ const ReportsTab: React.FC<{
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-        <button onClick={handlePrintReport} style={{ padding: '8px 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
-          🖨️ طباعة التقرير
-        </button>
+      {/* Filters */}
+      <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>الصف</label>
+            <select value={repGrade} onChange={(e) => { setRepGrade(e.target.value); setRepClass(''); }}
+              style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', background: '#fff', minWidth: '130px' }}>
+              <option value="">كل الصفوف</option>
+              {repGrades.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>الفصل</label>
+            <select value={repClass} onChange={(e) => setRepClass(e.target.value)} disabled={!repGrade}
+              style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', background: '#fff', minWidth: '110px', opacity: repGrade ? 1 : 0.5 }}>
+              <option value="">كل الفصول</option>
+              {repClasses.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>من تاريخ</label>
+            <input type="date" value={repDateFrom} onChange={(e) => setRepDateFrom(e.target.value)}
+              style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>إلى تاريخ</label>
+            <input type="date" value={repDateTo} onChange={(e) => setRepDateTo(e.target.value)}
+              style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px' }} />
+          </div>
+          <button onClick={handlePrintReport} style={{ height: '38px', padding: '0 20px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة التقرير</button>
+        </div>
       </div>
 
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-        <StatCard label="إجمالي المخالفات" value={violations.length} color="#4f46e5" />
+        <StatCard label="إجمالي المخالفات" value={filteredViols.length} color="#4f46e5" />
         <StatCard label="إجمالي الحسم" value={totalDeduction} color="#dc2626" />
         {byDegree.filter((d) => d.count > 0).map((d) => (
           <StatCard key={d.degree} label={`الدرجة ${d.label}`} value={d.count} color={d.color} />
