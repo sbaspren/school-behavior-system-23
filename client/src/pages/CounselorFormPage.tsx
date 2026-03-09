@@ -434,7 +434,7 @@ export default function CounselorFormPage() {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page: { direction: 'rtl', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", minHeight: '100vh', background: '#f0f2f5', paddingBottom: '70px' },
+  page: { direction: 'rtl', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", minHeight: '100vh', background: '#f0f2f5', paddingBottom: '70px', WebkitTapHighlightColor: 'transparent' },
   loadingPage: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", fontSize: '16px', color: '#6b7280' },
   errorPage: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif" },
   header: { position: 'sticky', top: 0, zIndex: 100, background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: '#fff', padding: '16px 20px', textAlign: 'center' },
