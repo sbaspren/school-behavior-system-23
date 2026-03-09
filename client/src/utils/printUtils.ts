@@ -131,7 +131,7 @@ body{margin:0;padding:10mm 12mm;font-family:'Traditional Arabic','Amiri',serif;f
 /** CSS القوالب الرسمية (النماذج A4) */
 export function getFormTemplateCSS(): string {
   return getLetterheadTableCSS() + `
-@page{size:A4;margin:5mm}
+@page{size:A4 portrait;margin:5mm}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Traditional Arabic','Amiri',serif;font-size:14pt;line-height:1.4;direction:rtl;color:#000;background:white;margin:0;padding:0}
 .print-template{display:none}
@@ -162,6 +162,7 @@ body{font-family:'Traditional Arabic','Amiri',serif;font-size:14pt;line-height:1
 .risk-box{border:2px solid #c0392b;padding:10px;margin:10px 0}
 .internal-section{border-top:2px dashed #000;margin-top:30px;padding-top:15px}
 .feedback-box{border:1px solid #999;height:80px;margin-top:5px;width:100%}
+.compact-table th,.compact-table td{padding:2px!important;font-size:13pt}
 @media print{@page{size:A4 portrait;margin:5mm}body{background:white;-webkit-print-color-adjust:exact}.page-container{width:100%;margin:0;padding:5mm 7mm}.referral-container{padding:3mm 6mm!important}.no-print{display:none}.tracking-table,.footer-table{page-break-inside:avoid}#edit-toolbar{display:none!important}}`;
 }
 
