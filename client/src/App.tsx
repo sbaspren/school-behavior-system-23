@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastProvider } from './components/shared/Toast';
 import Sidebar from './components/Sidebar';
 import LoginPage, { AuthUser } from './pages/LoginPage';
+import { settingsApi } from './api/settings';
 import SettingsPage from './pages/SettingsPage';
 import ViolationsPage from './pages/ViolationsPage';
 import PositiveBehaviorPage from './pages/PositiveBehaviorPage';
@@ -40,6 +41,10 @@ function getStoredUser(): AuthUser | null {
 function AppContent() {
   const [sidebarOpen] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(getStoredUser);
+  const [schoolName, setSchoolName] = useState('');
+  const [stages, setStages] = useState<string[]>([]);
+  const [currentStage, setCurrentStage] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const location = useLocation();
 
   const handleLogin = useCallback((_token: string, u: AuthUser) => {
@@ -51,6 +56,42 @@ function AppContent() {
     localStorage.removeItem('user');
     setUser(null);
   }, []);
+
+  // جلب إعدادات المدرسة والمراحل
+  const fetchAppData = useCallback(async () => {
+    try {
+      const [settingsRes, stagesRes] = await Promise.all([
+        settingsApi.getSettings().catch(() => null),
+        settingsApi.getStages().catch(() => null),
+      ]);
+      if (settingsRes?.data?.data?.schoolName) {
+        setSchoolName(settingsRes.data.data.schoolName);
+      }
+      if (stagesRes?.data?.data && Array.isArray(stagesRes.data.data)) {
+        // Backend returns: [{id, name, grades}] — نأخذ name (الاسم العربي)
+        const stageNames = stagesRes.data.data.map((s: any) => s.name || s.id || s);
+        setStages(stageNames);
+        if (stageNames.length > 0 && !currentStage) {
+          setCurrentStage(stageNames[0]);
+        }
+      }
+    } catch (e) {
+      // silent — settings might not be configured yet
+    }
+  }, [currentStage]);
+
+  useEffect(() => {
+    if (user) {
+      fetchAppData();
+    }
+  }, [user, fetchAppData]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    await fetchAppData();
+    setRefreshing(false);
+  }, [refreshing, fetchAppData]);
 
   // Public routes — no auth required
   if (location.pathname === '/form') {
@@ -82,24 +123,37 @@ function AppContent() {
 
   return (
     <div style={{ display: 'flex', direction: 'rtl', fontFamily: "'Cairo', 'IBM Plex Sans Arabic', sans-serif", minHeight: '100vh' }}>
-      <Sidebar open={sidebarOpen} role={user.role} />
+      <Sidebar open={sidebarOpen} role={user.role} schoolName={schoolName} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        {/* Top Header */}
-        <header style={{
-          background: '#fff', borderBottom: '1px solid #e8ebf2',
+        {/* Top Header — مطابق للأصلي */}
+        <header className="no-print" style={{
+          background: 'var(--c-surface)', borderBottom: '1px solid var(--c-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 24px', height: '56px', minHeight: '56px',
-          boxShadow: '0 1px 4px rgba(0,0,0,.03)',
+          boxShadow: '0 1px 4px rgba(0,0,0,.03)', zIndex: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <select id="stage-selector" style={{
-              padding: '8px 16px', border: '1.5px solid #e8ebf2', borderRadius: '8px',
-              fontSize: '14px', minWidth: '170px',
-            }}>
-              <option value="">جميع المراحل</option>
+            <select
+              id="stage-selector"
+              value={currentStage}
+              onChange={(e) => setCurrentStage(e.target.value)}
+              style={{ minWidth: '170px' }}
+            >
+              {stages.length === 0 && <option value="">جاري التحميل...</option>}
+              {stages.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              id="refreshBtn"
+              onClick={handleRefresh}
+              style={{ opacity: refreshing ? 0.5 : 1, pointerEvents: refreshing ? 'none' : 'auto' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>refresh</span>
+              {' '}تحديث
+            </button>
             <span style={{ fontSize: '13px', color: '#374151', fontWeight: 600 }}>{user.name}</span>
             <span style={{ fontSize: '11px', color: '#9ca3af', background: '#f3f4f6', padding: '4px 8px', borderRadius: '6px' }}>{user.role}</span>
             <button onClick={handleLogout} style={{

@@ -4,12 +4,14 @@ import { NavLink } from 'react-router-dom';
 interface Props {
   open: boolean;
   role?: string;
+  schoolName?: string;
 }
 
 interface NavItem {
   path: string;
   label: string;
-  icon: string; // Material Symbols icon name
+  icon: string;
+  iconColor: string;
   roles?: string[];
 }
 
@@ -19,37 +21,58 @@ interface NavGroup {
 }
 
 const NAV_ITEMS: NavGroup[] = [
+  // ── 0. لوحة المتابعة (بدون عنوان مجموعة) ──
   { section: '', items: [
-    { path: '/', label: 'لوحة التحكم', icon: 'dashboard' },
+    { path: '/', label: 'لوحة المتابعة', icon: 'dashboard', iconColor: '#4f46e5' },
   ]},
-  { section: 'شؤون الطلاب', items: [
-    { path: '/violations', label: 'المخالفات السلوكية', icon: 'gavel' },
-    { path: '/behavior-history', label: 'سجل سلوك الطالب', icon: 'folder_open' },
-    { path: '/positive', label: 'السلوك الإيجابي', icon: 'star' },
-    { path: '/attendance', label: 'التأخر والاستئذان', icon: 'schedule', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
-    { path: '/tardiness', label: 'التأخر', icon: 'timer_off', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
-    { path: '/absence', label: 'الغياب', icon: 'event_busy', roles: ['Admin', 'Deputy', 'Counselor'] },
-    { path: '/permissions', label: 'الاستئذان', icon: 'exit_to_app', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
-    { path: '/notes', label: 'الملاحظات التربوية', icon: 'menu_book' },
-    { path: '/parent-excuse', label: 'أعذار أولياء الأمور', icon: 'mark_email_read', roles: ['Admin', 'Deputy', 'Counselor'] },
-    { path: '/general-forms', label: 'النماذج العامة', icon: 'folder_open', roles: ['Admin', 'Deputy', 'Counselor'] },
-    { path: '/audit-log', label: 'سجل السلوك', icon: 'history', roles: ['Admin', 'Deputy', 'Counselor'] },
+
+  // ── 1. السلوك والمخالفات ──
+  { section: 'السلوك والمخالفات', items: [
+    { path: '/violations', label: 'المخالفات السلوكية', icon: 'gavel', iconColor: '#6366f1' },
+    { path: '/behavior-history', label: 'سجل سلوك الطالب', icon: 'folder_open', iconColor: '#6366f1' },
+    { path: '/positive', label: 'السلوك الإيجابي', icon: 'star', iconColor: '#f59e0b' },
   ]},
-  { section: 'التواصل', items: [
-    { path: '/whatsapp', label: 'الواتساب', icon: 'chat', roles: ['Admin', 'Deputy'] },
-    { path: '/communication', label: 'سجل التواصل', icon: 'call', roles: ['Admin', 'Deputy', 'Counselor'] },
+
+  // ── 2. الشؤون التعليمية ──
+  { section: 'الشؤون التعليمية', items: [
+    { path: '/notes', label: 'الملاحظات التربوية', icon: 'menu_book', iconColor: '#10b981' },
+    { path: '/academic', label: 'التحصيل الدراسي', icon: 'analytics', iconColor: '#14b8a6' },
   ]},
-  { section: 'التوثيق', items: [
-    { path: '/noor', label: 'التوثيق في نور', icon: 'cloud_sync', roles: ['Admin', 'Deputy', 'Counselor'] },
-    { path: '/academic', label: 'التحصيل الدراسي', icon: 'analytics', roles: ['Admin', 'Deputy', 'Counselor'] },
-    { path: '/reports', label: 'التقارير والإحصائيات', icon: 'bar_chart', roles: ['Admin', 'Deputy', 'Counselor'] },
+
+  // ── 3. المواظبة والغياب ──
+  { section: 'المواظبة والغياب', items: [
+    { path: '/tardiness', label: 'التأخر', icon: 'timer_off', iconColor: '#ef4444', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
+    { path: '/permissions', label: 'الاستئذان', icon: 'exit_to_app', iconColor: '#06b6d4', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
+    { path: '/absence', label: 'الغياب', icon: 'event_busy', iconColor: '#f97316', roles: ['Admin', 'Deputy', 'Counselor'] },
+    { path: '/attendance', label: 'التأخر والاستئذان', icon: 'schedule', iconColor: '#0891b2', roles: ['Admin', 'Deputy', 'Counselor', 'Guard'] },
+    { path: '/parent-excuse', label: 'أعذار أولياء الأمور', icon: 'mark_email_read', iconColor: '#8b5cf6', roles: ['Admin', 'Deputy', 'Counselor'] },
   ]},
+
+  // ── 4. الخدمات العامة ──
+  { section: 'الخدمات العامة', items: [
+    { path: '/general-forms', label: 'النماذج العامة', icon: 'folder_open', iconColor: '#f97316', roles: ['Admin', 'Deputy', 'Counselor'] },
+  ]},
+
+  // ── 5. نظام نور ──
+  { section: 'نظام نور', items: [
+    { path: '/noor', label: 'التوثيق في نور', icon: 'cloud_sync', iconColor: '#00897b', roles: ['Admin', 'Deputy', 'Counselor'] },
+  ]},
+
+  // ── 6. خدمات التواصل ──
+  { section: 'خدمات التواصل', items: [
+    { path: '/whatsapp', label: 'أدوات واتساب', icon: 'chat', iconColor: '#22c55e', roles: ['Admin', 'Deputy'] },
+    { path: '/communication', label: 'سجل التواصل', icon: 'history', iconColor: '#3b82f6', roles: ['Admin', 'Deputy', 'Counselor'] },
+  ]},
+
+  // ── 7. النظام ──
   { section: 'النظام', items: [
-    { path: '/settings', label: 'الإعدادات', icon: 'settings', roles: ['Admin'] },
+    { path: '/settings', label: 'الإعدادات', icon: 'settings', iconColor: '#64748b', roles: ['Admin'] },
+    { path: '/audit-log', label: 'سجل السلوك', icon: 'history', iconColor: '#6366f1', roles: ['Admin', 'Deputy', 'Counselor'] },
+    { path: '/reports', label: 'التقارير والإحصائيات', icon: 'bar_chart', iconColor: '#14b8a6', roles: ['Admin', 'Deputy', 'Counselor'] },
   ]},
 ];
 
-const Sidebar: React.FC<Props> = ({ open, role }) => {
+const Sidebar: React.FC<Props> = ({ open, role, schoolName }) => {
   if (!open) return null;
 
   const visibleGroups = NAV_ITEMS.map(group => ({
@@ -60,68 +83,101 @@ const Sidebar: React.FC<Props> = ({ open, role }) => {
   return (
     <aside style={{
       width: '240px', minWidth: '240px', height: '100vh',
-      background: '#fff', borderLeft: '1px solid #e8ebf2',
-      display: 'flex', flexDirection: 'column', overflowY: 'auto',
+      background: '#fff', borderLeft: '1px solid var(--c-border)',
+      display: 'flex', flexDirection: 'column',
       boxShadow: '1px 0 8px rgba(0,0,0,.03)',
     }}>
-      {/* Logo */}
+      {/* Logo — مطابق للأصلي: 36×36, radius 10px, icon 20px */}
       <div style={{
-        padding: '16px 20px', borderBottom: '1px solid #e8ebf2',
-        display: 'flex', alignItems: 'center', gap: '12px',
+        height: '64px', display: 'flex', alignItems: 'center',
+        padding: '0 20px', gap: '12px',
+        borderBottom: '1px solid var(--c-border-light)',
       }}>
         <div style={{
-          width: '40px', height: '40px',
+          width: '36px', height: '36px',
           background: 'linear-gradient(135deg, #4f46e5, #8b5cf6)',
-          borderRadius: '12px',
+          borderRadius: '10px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontWeight: 800, fontSize: '18px',
-          boxShadow: '0 2px 8px rgba(79,70,229,.25)',
+          flexShrink: 0,
         }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>school</span>
+          <span className="material-symbols-outlined" style={{
+            fontSize: '20px', color: 'white',
+            WebkitTextFillColor: 'white', background: 'none',
+          }}>school</span>
         </div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: '14px', color: '#1a1d2e', fontFamily: "'Noto Kufi Arabic', Cairo, sans-serif" }}>شؤون الطلاب</div>
-          <div style={{ fontSize: '11px', color: '#9da3b8' }}>نظام إدارة السلوك</div>
+          <h1 style={{
+            margin: 0, fontSize: '15px', fontWeight: 800,
+            color: 'var(--c-text)',
+            fontFamily: "'Noto Kufi Arabic', sans-serif",
+            lineHeight: 1.3,
+          }}>نظام شؤون الطلاب</h1>
+          <div style={{ fontSize: '10px', color: '#9da3b8', fontWeight: 500 }}>
+            {schoolName || ''}
+          </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav style={{ padding: '8px 12px', flex: 1 }}>
+      <nav style={{ flex: 1, padding: '12px', overflowY: 'auto' }}>
         {visibleGroups.map((group, gi) => (
           <div key={group.section || gi}>
+            {/* عنوان المجموعة */}
             {group.section && (
-              <div style={{
-                fontSize: '10px', fontWeight: 700, color: '#9da3b8',
+              <div className="nav-section-title" style={{
+                fontSize: '10px', fontWeight: 700, color: 'var(--c-text-muted)',
                 letterSpacing: '0.3px',
-                margin: '16px 8px 8px', padding: 0,
+                padding: '4px 12px',
+                marginTop: gi === 1 ? '8px' : '16px',
+                marginBottom: '4px',
               }}>
                 {group.section}
               </div>
             )}
+
+            {/* عناصر التنقل */}
             {group.items.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 end={item.path === '/'}
-                className="sidebar-nav-item"
+                className={({ isActive }) =>
+                  `sidebar-nav-item${isActive ? ' active' : ''}`
+                }
                 style={({ isActive }) => ({
-                  display: 'flex', alignItems: 'center', gap: '10px',
+                  display: 'flex', alignItems: 'center', gap: '12px',
                   padding: '8px 12px', borderRadius: '8px',
                   textDecoration: 'none', fontSize: '13px',
-                  color: isActive ? '#fff' : '#5c6178',
-                  background: isActive ? '#4f46e5' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--c-text-secondary)',
+                  background: isActive ? 'var(--c-primary)' : 'transparent',
                   fontWeight: isActive ? 600 : 500,
                   marginBottom: '2px',
                   transition: 'all 0.15s cubic-bezier(.4,0,.2,1)',
-                  borderRight: isActive ? '3px solid #3730a3' : '3px solid transparent',
-                  boxShadow: isActive ? '0 2px 8px rgba(79,70,229,.15)' : 'none',
+                  borderRight: isActive ? '3px solid var(--c-primary-dark)' : '3px solid transparent',
+                  boxShadow: isActive ? '0 2px 8px var(--c-primary-glow)' : 'none',
                 })}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>{item.icon}</span>
-                <span>{item.label}</span>
+                {({ isActive }) => (
+                  <>
+                    <span className="material-symbols-outlined" style={{
+                      fontSize: '20px',
+                      color: isActive ? '#fff' : item.iconColor,
+                      WebkitTextFillColor: isActive ? '#fff' : undefined,
+                      background: isActive ? 'none' : undefined,
+                    }}>{item.icon}</span>
+                    <span style={{
+                      fontWeight: isActive ? 'bold' : 500,
+                    }}>{item.label}</span>
+                  </>
+                )}
               </NavLink>
             ))}
-            {gi === 0 && <div style={{ height: '1px', background: '#e8ebf2', margin: '8px 0' }} />}
+
+            {/* فاصل بعد لوحة المتابعة */}
+            {gi === 0 && <div style={{
+              height: '1px', background: 'var(--c-border-light)',
+              margin: '8px 12px',
+            }} />}
           </div>
         ))}
       </nav>

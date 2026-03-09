@@ -4,6 +4,8 @@
    ═══════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@700&display=swap');
 
 /* ═══ 1. متغيرات التصميم ═══ */
 :root {
@@ -83,17 +85,121 @@ body {
 }
 
 /* ═══ 3. الشريط الجانبي ═══ */
+aside, .w-64 {
+  width: var(--sidebar-w) !important;
+  background: var(--c-surface) !important;
+  border-left: 1px solid var(--c-border) !important;
+  box-shadow: 1px 0 8px rgba(0,0,0,.03) !important;
+}
+
+aside nav { padding: var(--sp-3) !important; }
+
+aside nav .nav-section-title {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: var(--c-text-muted) !important;
+  letter-spacing: 0.3px;
+  padding: var(--sp-1) var(--sp-3) !important;
+  margin-top: var(--sp-4) !important;
+  margin-bottom: var(--sp-1) !important;
+}
+
+.sidebar-nav-item {
+  border-radius: var(--r-sm) !important;
+  padding: var(--sp-2) var(--sp-3) !important;
+  margin-bottom: 2px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--c-text-secondary) !important;
+  transition: all .15s var(--ease) !important;
+  border-right: 3px solid transparent !important;
+}
+
 .sidebar-nav-item:hover {
   background: var(--c-primary-light) !important;
   color: var(--c-primary) !important;
+  border-right-color: transparent !important;
 }
+
+.sidebar-nav-item:hover .material-symbols-outlined {
+  color: var(--c-primary) !important;
+}
+
+.sidebar-nav-item[aria-current="page"] {
+  background: var(--c-primary) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  border-right: 3px solid var(--c-primary-dark) !important;
+  box-shadow: 0 2px 8px var(--c-primary-glow) !important;
+}
+
+.sidebar-nav-item[aria-current="page"] .material-symbols-outlined {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  background: none !important;
+}
+
+.sidebar-nav-item[aria-current="page"] span {
+  color: white !important;
+}
+
 .sidebar-nav-item[aria-current="page"]:hover {
   background: var(--c-primary) !important;
   color: #fff !important;
 }
 
+/* ═══ 3b. الهيدر العلوي ═══ */
+header, .h-16.bg-white {
+  background: var(--c-surface) !important;
+  border-bottom: 1px solid var(--c-border) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.03) !important;
+  padding: 0 var(--sp-6) !important;
+  height: 56px !important;
+}
+
+#stage-selector, .header-select {
+  background: var(--c-surface) !important;
+  border: 1.5px solid var(--c-border) !important;
+  border-radius: var(--r-sm) !important;
+  padding: var(--sp-2) var(--sp-5) var(--sp-2) var(--sp-3) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--c-text) !important;
+  cursor: pointer;
+  transition: all .15s var(--ease);
+}
+
+#stage-selector:focus, .header-select:focus {
+  border-color: var(--c-primary) !important;
+  box-shadow: 0 0 0 3px var(--c-primary-glow) !important;
+  outline: none !important;
+}
+
+#refreshBtn {
+  background: var(--c-bg) !important;
+  border: 1.5px solid var(--c-border) !important;
+  border-radius: var(--r-sm) !important;
+  padding: var(--sp-2) var(--sp-4) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--c-text-secondary) !important;
+  transition: all .15s var(--ease);
+}
+
+#refreshBtn:hover {
+  background: var(--c-primary-light) !important;
+  border-color: var(--c-primary) !important;
+  color: var(--c-primary) !important;
+}
+
+/* ═══ 3c. المحتوى الرئيسي ═══ */
+#main-content, main { background: var(--c-bg) !important; padding: var(--sp-6) !important; }
+
 /* ═══ 4. البطاقات ═══ */
-.form-card {
+.form-card,
+.bg-white.rounded-xl, .bg-white.rounded-lg, .bg-white.rounded-2xl,
+div[class*="bg-white"][class*="rounded"] {
   background: var(--c-surface) !important;
   border: 1px solid var(--c-border-light) !important;
   border-radius: var(--r-md) !important;
@@ -148,8 +254,6 @@ table:not(.sht):not(.data-table) tbody tr:hover { background: var(--c-surface-ho
 .tbl-footer .s { display: flex; align-items: center; gap: 5px; }
 .tbl-footer .s .d { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #d1d5db; display: inline-block; }
 
-table { width: 100% !important; }
-
 /* ═══ 6. الأزرار ═══ */
 button, .btn { font-family: inherit !important; border-radius: var(--r-sm) !important; font-weight: 600 !important; transition: all .15s var(--ease) !important; cursor: pointer; }
 button:active { transform: scale(0.97); }
@@ -186,13 +290,6 @@ select {
   color: var(--c-text) !important;
   cursor: pointer;
   transition: all .15s var(--ease);
-}
-
-input[type="checkbox"] {
-  width: 16px !important; height: 16px !important;
-  border-radius: 4px !important;
-  accent-color: var(--c-primary) !important;
-  cursor: pointer;
 }
 
 /* ═══ 8. النوافذ المنبثقة ═══ */
@@ -249,6 +346,93 @@ div[class*="backdrop-blur"] {
 
 /* ═══ 13. تحسينات الصفحات الداخلية ═══ */
 .max-w-7xl, .max-w-6xl, .max-w-5xl { max-width: 100% !important; }
+
+/* بطاقات الإحصائيات العلوية */
+[class*="bg-indigo-50"][class*="border-indigo"],
+[class*="bg-amber-50"][class*="border-amber"],
+[class*="bg-red-50"][class*="border-red"],
+[class*="bg-green-50"][class*="border-green"],
+[class*="bg-purple-50"][class*="border-purple"],
+[class*="bg-orange-50"][class*="border-orange"] {
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--shadow-xs) !important;
+  transition: all .15s var(--ease) !important;
+}
+
+/* التبويبات */
+.flex.border-b > button {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  transition: all .15s var(--ease) !important;
+}
+
+/* البانر الملوّن العلوي */
+[class*="bg-gradient-to-r"][class*="rounded-xl"] {
+  border-radius: var(--r-lg) !important;
+  padding: var(--sp-5) var(--sp-6) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* أزرار الأقسام الملونة */
+[class*="bg-indigo-600"][class*="rounded-lg"]:hover,
+[class*="bg-green-600"][class*="rounded-lg"]:hover,
+[class*="bg-purple-600"][class*="rounded-lg"]:hover {
+  box-shadow: var(--shadow-md) !important;
+  filter: brightness(1.05);
+}
+
+/* حاوية الجدول */
+.bg-white.overflow-hidden[class*="rounded"] {
+  border-radius: var(--r-lg) !important;
+  border: 1px solid var(--c-border-light) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* كل الجداول - ضمان العرض الكامل */
+table { width: 100% !important; }
+
+/* checkbox */
+input[type="checkbox"] {
+  width: 16px !important; height: 16px !important;
+  border-radius: 4px !important;
+  accent-color: var(--c-primary) !important;
+  cursor: pointer;
+}
+
+/* النوافذ المنبثقة */
+[class*="max-w-4xl"][class*="bg-white"],
+[class*="max-w-3xl"][class*="bg-white"],
+[class*="max-w-2xl"][class*="bg-white"],
+[class*="max-w-lg"][class*="bg-white"] {
+  border-radius: var(--r-xl) !important;
+  box-shadow: var(--shadow-xl) !important;
+}
+
+/* حالة فارغة */
+.text-center .text-gray-400, .text-center .text-gray-500 {
+  color: var(--c-text-muted) !important;
+}
+
+/* truncate */
+.truncate { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ═══ 13b. تحسينات Tailwind ═══ */
+.rounded-lg { border-radius: var(--r-sm) !important; }
+.rounded-xl { border-radius: var(--r-md) !important; }
+.rounded-2xl { border-radius: var(--r-lg) !important; }
+.shadow-sm { box-shadow: var(--shadow-sm) !important; }
+.shadow-md, .shadow { box-shadow: var(--shadow-md) !important; }
+.shadow-lg { box-shadow: var(--shadow-lg) !important; }
+
+.bg-gray-50 { background-color: var(--c-bg) !important; }
+.bg-gray-100 { background-color: #eef0f5 !important; }
+.border-gray-200 { border-color: var(--c-border) !important; }
+.border-gray-100 { border-color: var(--c-border-light) !important; }
+
+.text-gray-400 { color: var(--c-text-muted) !important; }
+.text-gray-500 { color: var(--c-text-secondary) !important; }
+.text-gray-600 { color: var(--c-text-secondary) !important; }
+.text-gray-700, .text-gray-800, .text-gray-900 { color: var(--c-text) !important; }
 
 /* ═══ 14. التفاعل ═══ */
 button:not(:disabled):active, .nav-item:active { transform: scale(0.98) !important; }
