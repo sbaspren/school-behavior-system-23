@@ -1,5 +1,5 @@
 // ===== قوالب الطباعة الرسمية (23 نموذج) =====
-import { toIndic, escapeHtml, shortenName, getFormTemplateCSS, buildLetterheadHtml } from './printUtils';
+import { toIndic, escapeHtml, shortenName, getFormTemplateCSS, buildLetterheadHtml, adjustAllFields } from './printUtils';
 
 // ===== أنواع البيانات =====
 export interface PrintFormData {
@@ -84,6 +84,7 @@ interface SchoolSettings {
   schoolName?: string;
   eduAdmin?: string;
   eduDept?: string;
+  letterhead?: string;
 }
 
 // ===== قائمة النماذج =====
@@ -966,19 +967,30 @@ function fillFormData(doc: Document, formId: FormId, data: PrintFormData): void 
   }
 }
 
-// ===== جعل الحقول قابلة للتعديل + شريط الطباعة =====
+// ===== جعل الحقول قابلة للتعديل + شريط الطباعة — مطابق للأصلي =====
 function makeEditable(doc: Document): void {
+  // ضبط حجم الخط أولاً
+  adjustAllFields(doc);
+
+  // جعل حقول البيانات قابلة للتعديل
   doc.querySelectorAll('.data-field').forEach((el) => {
-    (el as HTMLElement).contentEditable = 'true';
+    (el as HTMLElement).setAttribute('contenteditable', 'true');
     (el as HTMLElement).style.cursor = 'text';
+    (el as HTMLElement).style.outline = 'none';
   });
-  // إضافة شريط الطباعة
-  const toolbar = doc.createElement('div');
-  toolbar.className = 'print-toolbar';
-  toolbar.innerHTML = `<span>يمكنك تعديل الحقول قبل الطباعة</span><button onclick="window.print()">طباعة</button>`;
-  doc.body.insertBefore(toolbar, doc.body.firstChild);
-  // إزاحة المحتوى لتفادي التداخل مع الشريط
-  (doc.body.firstElementChild?.nextElementSibling as HTMLElement | null)?.style.setProperty('margin-top', '50px');
+
+  // ★ إضافة شريط تحكم للطباعة — مطابق للأصلي
+  const bar = doc.createElement('div');
+  bar.id = 'edit-toolbar';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-family:Tajawal,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.3);direction:rtl';
+  bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:700">✏️ يمكنك النقر على أي حقل لتعديله قبل الطباعة</span></div>'
+    + '<button onclick="document.getElementById(\'edit-toolbar\').style.display=\'none\';window.print()" style="padding:8px 24px;background:white;color:#4f46e5;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ طباعة</button>';
+  doc.body.insertBefore(bar, doc.body.firstChild);
+
+  // إخفاء الشريط عند الطباعة
+  const style = doc.createElement('style');
+  style.textContent = '@media print { #edit-toolbar { display:none !important; } }';
+  doc.head.appendChild(style);
 }
 
 // ===== الدالة الرئيسية: طباعة نموذج =====
@@ -989,21 +1001,30 @@ export function printForm(formId: FormId, data: PrintFormData, settings: SchoolS
 
   const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">`
     + `<title>${escapeHtml(FORM_NAMES[formId] || formId)}</title>`
-    + `<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">`
+    + `<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Traditional+Arabic&display=swap" rel="stylesheet">`
     + `<style>${css}</style></head><body>${templateHtml}</body></html>`;
 
   const win = window.open('', '_blank');
   if (!win) return;
+  win.document.open();
   win.document.write(html);
   win.document.close();
 
-  // تطبيق الكليشة
-  const headerImg = win.document.querySelector('.header-container');
-  if (headerImg) headerImg.innerHTML = letterheadHtml;
+  // تطبيق الكليشة على كل header-container
+  win.document.querySelectorAll('.header-container').forEach((hc) => {
+    if (settings.letterheadMode === 'text' || settings.letterheadMode === 'Text') {
+      (hc as HTMLElement).style.border = 'none';
+      (hc as HTMLElement).style.margin = '0';
+      (hc as HTMLElement).style.padding = '0';
+    }
+    hc.innerHTML = letterheadHtml;
+  });
 
   // تعبئة البيانات
   fillFormData(win.document, formId, data);
 
-  // جعل الحقول قابلة للتعديل
-  makeEditable(win.document);
+  // ضبط الخط + جعل الحقول قابلة للتعديل (بعد تأخير لضمان التحميل)
+  setTimeout(() => {
+    makeEditable(win.document);
+  }, 300);
 }

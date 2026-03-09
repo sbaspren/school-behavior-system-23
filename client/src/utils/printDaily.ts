@@ -10,6 +10,7 @@ interface SchoolSettings {
   schoolName?: string;
   eduAdmin?: string;
   eduDept?: string;
+  letterhead?: string;
 }
 
 // ===== تكوين كل نوع كشف =====
