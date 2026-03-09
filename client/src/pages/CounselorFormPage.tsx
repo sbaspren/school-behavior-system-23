@@ -64,7 +64,7 @@ const POSITIVE: PositiveItem[] = [
 const POS_DEG_COLORS: Record<number, string> = {6:'#dcfce7',4:'#fef9c3',2:'#dbeafe'};
 const POS_DEG_TEXT: Record<number, string> = {6:'#166534',4:'#854d0e',2:'#1e40af'};
 const REASONS = ['ظرف صحي', 'ظرف أسري', 'موعد حكومي', 'طلب ولي الأمر'];
-const GUARDIANS = ['الأب', 'الأخ', 'الأم', 'أخرى'];
+const GUARDIANS = ['الأب', 'الأخ', 'الأم'];
 
 type TabId = 'permission' | 'notes' | 'positive';
 const TABS: { id: TabId; label: string; color: string }[] = [
@@ -96,8 +96,8 @@ export default function CounselorFormPage() {
   const [noteDetails, setNoteDetails] = useState('');
   const [selectedPositive, setSelectedPositive] = useState<PositiveItem | null>(null);
   const [positiveDetails, setPositiveDetails] = useState('');
-  const [reason, setReason] = useState(REASONS[0]);
-  const [guardian, setGuardian] = useState(GUARDIANS[0]);
+  const [reason, setReason] = useState('');
+  const [guardian, setGuardian] = useState('');
 
   const [showLog, setShowLog] = useState(false);
   const [logData, setLogData] = useState<TodayEntries | null>(null);
@@ -196,6 +196,10 @@ export default function CounselorFormPage() {
       }
       setMsg({ text: `تم التسجيل بنجاح (${selectedStudents.length} طالب)`, type: 'success' });
       setSelectedStudents([]);
+      // ★ Reset — مطابق لـ resetTab في الأصلي
+      if (tab === 'permission') { setReason(''); setGuardian(''); }
+      if (tab === 'notes') { setSelectedNote(null); setNoteDetails(''); }
+      if (tab === 'positive') { setSelectedPositive(null); setPositiveDetails(''); }
     } catch { setMsg({ text: 'حدث خطأ أثناء الحفظ', type: 'error' }); }
     finally { setSubmitting(false); }
   }, [tab, token, selectedStudents, selectedPositive, positiveDetails, selectedNote, noteSubType,
@@ -266,9 +270,11 @@ export default function CounselorFormPage() {
           <div style={S.card}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <select value={reason} onChange={e => setReason(e.target.value)} style={S.select}>
+                <option value="">السبب</option>
                 {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
               <select value={guardian} onChange={e => setGuardian(e.target.value)} style={S.select}>
+                <option value="">المستلم</option>
                 {GUARDIANS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
@@ -376,7 +382,11 @@ export default function CounselorFormPage() {
       </div>
 
       <div style={S.bottomBar}>
-        <button onClick={handleSubmit} disabled={submitting || selectedStudents.length === 0} style={{
+        <button onClick={handleSubmit} disabled={submitting || selectedStudents.length === 0
+          || (tab === 'permission' && (!reason || !guardian))
+          || (tab === 'notes' && !selectedNote)
+          || (tab === 'positive' && !selectedPositive)
+        } style={{
           ...S.submitBtn, background: selectedStudents.length > 0 ? tabColor : '#d1d5db', opacity: submitting ? 0.6 : 1,
         }}>{submitting ? 'جاري الإرسال...' : `إرسال (${selectedStudents.length})`}</button>
         <button onClick={loadLog} style={S.logBtn}>سجل اليوم</button>

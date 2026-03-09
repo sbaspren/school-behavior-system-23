@@ -146,7 +146,7 @@ const DEGREE_LABELS: Record<number, string> = {1:'الأولى',2:'الثاني�
 const POS_DEG_COLORS: Record<number, string> = {6:'#dcfce7',4:'#fef9c3',2:'#dbeafe'};
 const POS_DEG_TEXT: Record<number, string> = {6:'#166534',4:'#854d0e',2:'#1e40af'};
 const REASONS = ['ظرف صحي', 'ظرف أسري', 'موعد حكومي', 'طلب ولي الأمر'];
-const GUARDIANS = ['الأب', 'الأخ', 'الأم', 'أخرى'];
+const GUARDIANS = ['الأب', 'الأخ', 'الأم'];
 
 function isViolAvailable(v: ViolationItem, stage: string) {
   if (!stage || v.stage === 'الكل') return true;
@@ -200,14 +200,14 @@ export default function WakeelFormPage() {
   const [violSubType, setViolSubType] = useState('حضوري');
   const [violSearch, setViolSearch] = useState('');
   const [selectedViol, setSelectedViol] = useState<ViolationItem | null>(null);
-  const [absenceType, setAbsenceType] = useState('يوم كامل');
+  const [absenceType, setAbsenceType] = useState('');
   const [selectedPositive, setSelectedPositive] = useState<PositiveItem | null>(null);
   const [positiveDetails, setPositiveDetails] = useState('');
   const [noteSubType, setNoteSubType] = useState('سلبية');
   const [selectedNote, setSelectedNote] = useState<{ id: number; text: string } | null>(null);
   const [noteDetails, setNoteDetails] = useState('');
-  const [reason, setReason] = useState(REASONS[0]);
-  const [guardian, setGuardian] = useState(GUARDIANS[0]);
+  const [reason, setReason] = useState('');
+  const [guardian, setGuardian] = useState('');
 
   // Log modal
   const [showLog, setShowLog] = useState(false);
@@ -407,6 +407,12 @@ export default function WakeelFormPage() {
 
       setMsg({ text: `تم التسجيل بنجاح (${selectedStudents.length} طالب)`, type: 'success' });
       setSelectedStudents([]);
+      // ★ Reset tab-specific state — مطابق لـ resetTab في الأصلي
+      if (tab === 'permission') { setReason(''); setGuardian(''); }
+      if (tab === 'violations') setSelectedViol(null);
+      if (tab === 'positive') { setSelectedPositive(null); setPositiveDetails(''); }
+      if (tab === 'notes') { setSelectedNote(null); setNoteDetails(''); }
+      if (tab === 'absence') setAbsenceType('');
     } catch {
       setMsg({ text: 'حدث خطأ أثناء الحفظ', type: 'error' });
     } finally {
@@ -620,9 +626,11 @@ export default function WakeelFormPage() {
           <div style={S.card}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
               <select value={reason} onChange={e => setReason(e.target.value)} style={S.select}>
+                <option value="">السبب</option>
                 {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
               <select value={guardian} onChange={e => setGuardian(e.target.value)} style={S.select}>
+                <option value="">المستلم</option>
                 {GUARDIANS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
@@ -700,7 +708,13 @@ export default function WakeelFormPage() {
 
       {/* Bottom bar */}
       <div style={S.bottomBar}>
-        <button onClick={handleSubmit} disabled={submitting || selectedStudents.length === 0} style={{
+        <button onClick={handleSubmit} disabled={submitting || selectedStudents.length === 0
+          || (tab === 'violations' && !selectedViol)
+          || (tab === 'absence' && !absenceType)
+          || (tab === 'positive' && !selectedPositive)
+          || (tab === 'notes' && !selectedNote)
+          || (tab === 'permission' && (!reason || !guardian))
+        } style={{
           ...S.submitBtn,
           background: selectedStudents.length > 0 ? tabColor : '#d1d5db',
           opacity: submitting ? 0.6 : 1,
