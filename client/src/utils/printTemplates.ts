@@ -24,6 +24,7 @@ export interface PrintFormData {
   // محضر ضبط واقعة
   mahdarLocation?: string;
   mahdarObservations?: string[];
+  mahdarWitnesses?: { name: string; role: string }[];
   // لجنة
   lajnahPrevProcedures?: string;
   lajnahRecommendations?: string;
@@ -39,6 +40,9 @@ export interface PrintFormData {
   // حالة عالية الخطورة
   riskTypes?: string[];
   riskDesc?: string;
+  riskObserver?: string;
+  riskDate?: string;
+  riskTime?: string;
   // إبلاغ إيذاء
   eblaghReporter?: string;
   eblaghRole?: string;
@@ -68,6 +72,10 @@ export interface PrintFormData {
   materialDamage?: string[] | string;
   involvedStudents?: { name: string; grade: string; role: string }[];
   witnesses?: string[];
+  authors?: { name: string; role: string }[];
+  students?: { name: string; grade: string }[];
+  authorName?: string;
+  authorRole?: string;
   // توثيق تواصل
   contactDay?: string;
   contactDate?: string;
@@ -229,23 +237,30 @@ function getTemplateHtml(formId: FormId): string {
 
     case 'mahdar_dab_wakea':
       return `<div class="page-container">${H}
+<div class="confidential-mark">(سري)</div>
 <div class="form-title">محضر ضبط واقعة / مخالفة</div>
 <div class="form-body">
-  <div class="section-block">إنه في يوم: <span class="data-field with-dots" style="min-width:80px;" id="mahdar_day"></span> الموافق: <span class="data-field with-dots indic-num" style="min-width:120px;" id="mahdar_date"></span> هـ</div>
-  <div class="section-block align-right">تم ضبط الطالب: <span class="data-field with-dots" style="min-width:250px;" id="mahdar_studentName"></span> بالصف: <span class="data-field with-dots indic-num" style="min-width:120px;" id="mahdar_grade"></span></div>
-  <div class="section-block align-right">مكان الضبط: <span class="data-field with-dots" style="min-width:200px;" id="mahdar_location"></span></div>
-  <div class="sub-header">وصف الواقعة / المخالفة:</div>
-  <div class="section-block align-right"><span class="data-field with-dots align-right" style="width:100%;display:inline-block;" id="mahdar_problem"></span></div>
-  <div class="sub-header">المشاهدات / المضبوطات:</div>
-  <div class="section-block" style="display:flex;flex-wrap:wrap;gap:15px;">
-    <span>□ <span id="mahdar_obs_0">□</span> إفادة شاهد</span>
-    <span>□ <span id="mahdar_obs_1">□</span> صور / فيديو</span>
-    <span>□ <span id="mahdar_obs_2">□</span> أدوات مضبوطة</span>
-    <span>□ <span id="mahdar_obs_3">□</span> تقرير طبي</span>
-    <span>□ <span id="mahdar_obs_4">□</span> أخرى</span>
+  <div class="section-block align-right">إنه في يوم: <span class="data-field with-dots" style="min-width:40px;" id="mahdar_day"></span> الموافق: <span class="data-field with-dots indic-num" style="min-width:60px;" id="mahdar_date"></span> هـ تم ضبط الطالب: <span class="data-field with-dots" style="min-width:60px;" id="mahdar_studentName"></span> بالصف: <span class="data-field with-dots" style="min-width:40px;" id="mahdar_grade"></span></div>
+  <div class="section-block align-right">بسبب قيامه بـ: <span class="data-field with-dots align-right" style="width:100%;display:inline-block;" id="mahdar_problem"></span></div>
+  <div class="section-block align-right">مكان الضبط: <span class="data-field with-dots" style="min-width:60%;" id="mahdar_location"></span></div>
+  <div class="section-block" style="border:1px solid #999;padding:10px;margin-top:10px;" id="mahdar_obs_box"><strong>نوع المشاهدة / المضبوطات:</strong><br>
+    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:20px;" id="mahdar_obs_list">
+      <span><span class="manual-checkbox" id="mahdar_obs_0"></span> إفادة شاهد</span>
+      <span><span class="manual-checkbox" id="mahdar_obs_1"></span> صور / فيديو</span>
+      <span><span class="manual-checkbox" id="mahdar_obs_2"></span> أدوات مضبوطة</span>
+      <span><span class="manual-checkbox" id="mahdar_obs_3"></span> تقرير طبي</span>
+      <span><span class="manual-checkbox" id="mahdar_obs_4"></span> أخرى: <span class="data-field with-dots" style="min-width:100px;" id="mahdar_obs_other_text"></span></span>
+    </div>
   </div>
-  <table class="tracking-table"><thead><tr><th style="width:5%;">م</th><th style="width:35%;">الاسم</th><th style="width:25%;">العمل المكلف به</th><th style="width:35%;">التوقيع</th></tr></thead>
-  <tbody id="mahdar_members_table">${emptyRows(7, 4)}</tbody></table>
+  <div class="section-block" style="margin-top:15px;"><strong>شهود الواقعة:</strong>
+    <table class="tracking-table"><thead><tr><th style="width:5%;">م</th><th style="width:35%;">الاسم</th><th style="width:25%;">الصفة / الوظيفة</th><th style="width:35%;">التوقيع</th></tr></thead>
+    <tbody id="mahdar_witnesses_body">${emptyRows(2, 4)}</tbody></table>
+  </div>
+  <table class="footer-table" style="margin-top:20px;"><tr>
+    <td style="width:33%;text-align:center;"><div class="signature-block" style="display:inline-block;text-align:right;"><strong style="display:block;margin-bottom:0.8em;text-align:center;">الطالب</strong><div style="margin-bottom:5px;white-space:nowrap;">الاسم: <span class="data-field with-dots" style="display:inline-block;min-width:150px;text-align:center;"></span></div><div style="white-space:nowrap;">التوقيع: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:150px;"></span></div></div></td>
+    <td style="width:33%;text-align:center;"><div class="signature-block" style="display:inline-block;text-align:right;"><strong style="display:block;margin-bottom:0.8em;text-align:center;">ولي الأمر (للعلم)</strong><div style="margin-bottom:5px;white-space:nowrap;">الاسم: <span class="data-field with-dots" style="display:inline-block;min-width:150px;text-align:center;"></span></div><div style="white-space:nowrap;">التوقيع: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:150px;"></span></div></div></td>
+    <td style="width:33%;text-align:center;"><div class="signature-block" style="display:inline-block;text-align:right;"><strong style="display:block;margin-bottom:0.8em;text-align:center;">مدير المدرسة</strong><div style="margin-bottom:5px;white-space:nowrap;">الاسم: <span class="data-field with-dots" style="display:inline-block;min-width:150px;text-align:center;"></span></div><div style="white-space:nowrap;">التوقيع: <span style="display:inline-block;border-bottom:1px dotted #000;min-width:150px;"></span></div></div></td>
+  </tr></table>
 </div></div>`;
 
     case 'mahdar_lajnah':
@@ -449,26 +464,44 @@ function getTemplateHtml(formId: FormId): string {
 
     case 'high_risk':
       return `<div class="page-container">${H}
+<div class="confidential-mark">(سري للغاية وعاجل)</div>
 <div class="form-title">نموذج إبلاغ عن حالة عالية الخطورة</div>
 <div class="form-body">
-  <div class="section-block align-right">اسم الطالب: <span class="data-field with-dots" style="min-width:250px;" id="risk_studentName"></span> الصف: <span class="data-field with-dots indic-num" style="min-width:120px;" id="risk_grade"></span></div>
-  <div class="sub-header">نوع الخطر:</div>
-  <div class="section-block" style="display:flex;flex-wrap:wrap;gap:15px;">
-    <span><span id="risk_chk_0">□</span> حيازة سلاح</span>
-    <span><span id="risk_chk_1">□</span> مخدرات</span>
-    <span><span id="risk_chk_2">□</span> تهديد بالعنف</span>
-    <span><span id="risk_chk_3">□</span> مضاربة جماعية</span>
-    <span><span id="risk_chk_4">□</span> تحرش</span>
-    <span><span id="risk_chk_5">□</span> أخرى: <span class="data-field with-dots" id="risk_other_text" style="min-width:100px;"></span></span>
+  <div class="section-block align-right">اسم الطالب: <span class="data-field with-dots" style="min-width:250px;" id="risk_studentName"></span> الصف الدراسي: <span class="data-field with-dots" style="min-width:120px;" id="risk_grade"></span></div>
+  <div class="risk-box" style="margin-bottom:15px;" id="risk_types_box"><strong>نوع الخطر:</strong><br>
+    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:15px;font-size:15pt;" id="risk_types_list">
+      <span><span class="manual-checkbox" id="risk_chk_0"></span> حيازة سلاح</span>
+      <span><span class="manual-checkbox" id="risk_chk_1"></span> مخدرات</span>
+      <span><span class="manual-checkbox" id="risk_chk_2"></span> تهديد بالعنف</span>
+      <span><span class="manual-checkbox" id="risk_chk_3"></span> مضاربة جماعية</span>
+      <span><span class="manual-checkbox" id="risk_chk_4"></span> تحرش</span>
+      <span><span class="manual-checkbox" id="risk_chk_5"></span> أخرى: <span class="data-field with-dots" style="min-width:100px;" id="risk_other_text"></span></span>
+    </div>
   </div>
-  <div class="sub-header">وصف الحالة:</div>
-  <div class="section-block"><span class="data-field with-dots align-right" style="width:100%;display:inline-block;min-height:60px;" id="risk_desc"></span></div>
-  <div class="sub-header">الإجراءات الفورية المتخذة:</div>
-  <div class="feedback-box" style="min-height:80px;"></div>
-  <table class="footer-table"><tr>
-    <td style="width:50%;"><div class="signature-block"><strong>الموجه الطلابي</strong><div style="margin-top:8px;">الاسم: <span id="risk_counselor" class="with-dots" style="min-width:150px;"></span></div></div></td>
-    <td style="width:50%;"><div class="signature-block"><strong>مدير المدرسة</strong><div style="margin-top:8px;">الاسم: <span id="risk_manager" class="with-dots" style="min-width:150px;"></span></div></div></td>
-  </tr></table>
+  <div class="section-block" style="margin-bottom:15px;"><strong>وصف الحالة:</strong><br><span class="data-field with-dots" style="width:100%;margin-bottom:5px;" id="risk_desc"></span></div>
+  <div class="section-block align-right" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;margin-bottom:15px;">
+    <div style="width:50%;">اسم راصد الحالة: <span class="data-field with-dots" style="width:60%;" id="risk_observer"></span></div>
+    <div style="width:25%;">تاريخ الرصد: <span class="data-field with-dots indic-num" style="width:50%;" id="risk_date"></span></div>
+    <div style="width:20%;">وقت الرصد: <span class="data-field with-dots indic-num" style="width:45%;" id="risk_time"></span></div>
+  </div>
+  <div class="section-block" style="margin-bottom:20px;"><strong>الإجراءات المتخذة مع الحالة:</strong><br>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;font-size:14pt;">
+      <span><span class="manual-checkbox"></span> تبليغ إدارة التعليم.</span>
+      <span><span class="manual-checkbox"></span> تبليغ الجهات الأمنية.</span>
+      <span><span class="manual-checkbox"></span> تبليغ الحماية من العنف الأسري وحماية الطفل.</span>
+      <span><span class="manual-checkbox"></span> تبليغ وزارة الصحة.</span>
+      <span><span class="manual-checkbox"></span> التواصل مع الأسرة لإخطارها بوضع الحالة.</span>
+      <span><span class="manual-checkbox"></span> عقد اجتماع طارئ للجنة التوجيه الطلابي لدراسة الحالة ووضع خطة لمعالجتها بالتكامل مع الجهات ذات العلاقة.</span>
+      <span><span class="manual-checkbox"></span> رفع بلاغ عن الحالة في الأنظمة التقنية الخاصة بالبلاغات.</span>
+    </div>
+  </div>
+  <div class="section-block" style="display:flex;justify-content:flex-end;padding-top:20px;border-top:1px solid #ddd;">
+    <div style="text-align:center;min-width:250px;"><strong style="display:block;margin-bottom:12px;font-size:15pt;">مدير المدرسة</strong>
+      <div style="margin-bottom:8px;text-align:right;">الاسم: <span class="data-field with-dots" style="min-width:180px;" id="risk_manager"></span></div>
+      <div style="margin-bottom:8px;text-align:right;">التوقيع: <span class="with-dots" style="min-width:180px;"></span></div>
+      <div style="text-align:right;">التاريخ: <span class="data-field with-dots indic-num" style="min-width:180px;" id="risk_manager_date"></span></div>
+    </div>
+  </div>
 </div></div>`;
 
     case 'eblagh_etha':
@@ -554,23 +587,32 @@ function getTemplateHtml(formId: FormId): string {
 
     case 'mashajara':
       return `<div class="page-container">${H}
+<div class="confidential-mark">(سري)</div>
 <div class="form-title">محضر إثبات واقعة (سلوك غير تربوي)</div>
 <div class="form-body">
-  <div class="section-block">إنه في يوم: <span class="data-field with-dots" style="min-width:80px;" id="mashajara_day"></span> الموافق: <span class="data-field with-dots indic-num" style="min-width:120px;" id="mashajara_date"></span> الساعة: <span class="data-field with-dots indic-num" style="min-width:80px;" id="mashajara_time"></span></div>
-  <div class="section-block align-right">المكان: <span class="data-field with-dots" style="min-width:200px;" id="mashajara_location"></span></div>
-  <div class="section-block align-right">المبادر/البادئ: <span class="data-field with-dots" style="min-width:200px;" id="mashajara_initiator"></span></div>
-  <div class="sub-header">وصف الواقعة:</div>
-  <div class="section-block"><span class="data-field with-dots align-right" style="width:100%;display:inline-block;min-height:60px;" id="mashajara_desc"></span></div>
-  <div class="sub-header">الأضرار الجسدية:</div>
-  <div class="section-block"><span class="data-field with-dots align-right" style="width:100%;display:inline-block;min-height:40px;" id="mashajara_physical"></span></div>
-  <div class="sub-header">الأضرار المادية:</div>
-  <div class="section-block"><span class="data-field with-dots align-right" style="width:100%;display:inline-block;min-height:40px;" id="mashajara_material"></span></div>
-  <div class="sub-header">الأطراف المتورطة:</div>
-  <table class="tracking-table"><thead><tr><th style="width:5%;">م</th><th style="width:30%;">الاسم</th><th style="width:15%;">الصف</th><th style="width:20%;">الدور</th><th style="width:30%;">التوقيع</th></tr></thead>
-  <tbody id="mashajara_involved">${emptyRows(6, 5)}</tbody></table>
-  <div class="sub-header">الشهود:</div>
-  <table class="tracking-table"><thead><tr><th style="width:5%;">م</th><th style="width:45%;">الاسم</th><th style="width:50%;">التوقيع</th></tr></thead>
-  <tbody id="mashajara_witnesses">${emptyRows(4, 3)}</tbody></table>
+  <div class="section-block" style="text-align:justify;line-height:1.8;">
+    في يوم (<span class="data-field with-dots" style="min-width:40px;" id="mashajara_day"></span>) الموافق (<span class="data-field with-dots indic-num" style="min-width:60px;" id="mashajara_date"></span> هـ)، وعند الساعة (<span class="data-field with-dots" style="min-width:40px;" id="mashajara_time"></span>)، جرى تحرير هذا المحضر لإثبات واقعة مشاجرة بدنية حدثت في (<span class="data-field with-dots" style="min-width:80px;" id="mashajara_location"></span>) بين كلٍّ من:
+  </div>
+  <div id="mashajara_students_list"></div>
+  <div class="section-block align-right" style="line-height:1.8;">
+    وبحسب ما تم رصده وملاحظته، فقد بادر الطالب (<span class="data-field with-dots" style="min-width:60px;" id="mashajara_initiator"></span>) إلى القيام بالتالي:
+  </div>
+  <div class="section-block align-right" style="line-height:1.8;">
+    <span class="data-field with-dots align-right" style="min-width:100px;" id="mashajara_desc"></span>، في سلوك يخالف الضوابط التربوية والتعليمية المعتمدة، مما أدى إلى نشوب مشاجرة بين <span id="mashajara_parties_word">الطرفين</span>.
+  </div>
+  <div class="section-block align-right" style="line-height:1.8;">وقد نتج عن هذه الواقعة ما يلي:</div>
+  <div class="section-block align-right" style="line-height:1.8;">
+    <strong>أولاً: الأضرار الجسدية</strong>
+    <span class="data-field with-dots" style="width:100%;display:block;text-align:right;" id="mashajara_physical"></span>
+  </div>
+  <div class="section-block align-right" style="line-height:1.8;">
+    <strong>ثانياً: الأضرار المادية</strong>
+    <span class="data-field with-dots" style="width:100%;display:block;text-align:right;" id="mashajara_material"></span>
+  </div>
+  <div class="section-block" style="text-align:justify;line-height:1.8;margin-top:10px;">
+    وعليه تم تدوين هذا المحضر لإثبات ما حدث، واستكمال الإجراءات النظامية وفق اللوائح والتعليمات المعتمدة.
+  </div>
+  <div class="section-block align-right" style="margin-top:20px;">اسم مُحرِّر المحضر: <span class="data-field with-dots" style="min-width:60px;" id="mashajara_author"></span> الصفة: <span class="data-field with-dots" style="min-width:60px;" id="mashajara_author_role"></span> التوقيع: <span class="with-dots" style="min-width:60px;"></span> التاريخ: <span class="data-field with-dots indic-num" style="min-width:60px;" id="mashajara_author_date"></span></div>
 </div></div>`;
 
     default:
@@ -624,20 +666,36 @@ function fillFormData(doc: Document, formId: FormId, data: PrintFormData): void 
       fillField(doc, 'mahdar_date', data.violationDate, true);
       fillField(doc, 'mahdar_problem', '\u25CF ' + (data.violationText || ''));
       if (data.mahdarLocation) fillField(doc, 'mahdar_location', data.mahdarLocation);
+      // ★ المشاهدات / المضبوطات — تفعيل ✓ بدل □
       if (data.mahdarObservations) {
         const obsLabels = ['إفادة شاهد', 'صور / فيديو', 'أدوات مضبوطة', 'تقرير طبي', 'أخرى'];
         data.mahdarObservations.forEach((obs) => {
           const idx = obsLabels.indexOf(obs);
-          if (idx >= 0) {
+          if (idx >= 0 && idx < 5) {
             const chk = doc.getElementById('mahdar_obs_' + idx);
             if (chk) chk.textContent = '\u2713';
           } else {
+            // نوع غير معروف = "أخرى"
             const chk4 = doc.getElementById('mahdar_obs_4');
             if (chk4) chk4.textContent = '\u2713';
+            fillField(doc, 'mahdar_obs_other_text', obs);
           }
         });
       }
-      fillCommitteeMembers(doc, 'mahdar_members_table', data.committeeMembers);
+      // ★ شهود الواقعة — ديناميكي
+      if (data.mahdarWitnesses && data.mahdarWitnesses.length > 0) {
+        const wtb = doc.getElementById('mahdar_witnesses_body');
+        if (wtb) {
+          wtb.innerHTML = '';
+          data.mahdarWitnesses.forEach((w, i) => {
+            const tr = doc.createElement('tr');
+            tr.innerHTML = `<td class="indic-num">${toIndic(i + 1)}</td>`
+              + `<td style="text-align:right;padding-right:5px;font-weight:bold;">${escapeHtml(w.name)}</td>`
+              + `<td>${escapeHtml(w.role || '')}</td><td></td>`;
+            wtb.appendChild(tr);
+          });
+        }
+      }
       break;
 
     case 'mahdar_lajnah':
@@ -843,6 +901,7 @@ function fillFormData(doc: Document, formId: FormId, data: PrintFormData): void 
     case 'high_risk':
       fillField(doc, 'risk_studentName', data.studentName);
       fillField(doc, 'risk_grade', data.grade, true);
+      // ★ نوع الخطر — تفعيل ✓
       if (data.riskTypes) {
         const riskLabels = ['حيازة سلاح', 'مخدرات', 'تهديد بالعنف', 'مضاربة جماعية', 'تحرش'];
         data.riskTypes.forEach((rt) => {
@@ -857,9 +916,18 @@ function fillFormData(doc: Document, formId: FormId, data: PrintFormData): void 
           }
         });
       }
+      // ★ وصف الحالة
       if (data.riskDesc) fillField(doc, 'risk_desc', data.riskDesc);
-      if (data.counselorName) fillField(doc, 'risk_counselor', data.counselorName);
-      if (data.managerName) fillField(doc, 'risk_manager', data.managerName);
+      // ★ راصد الحالة
+      if (data.riskObserver) fillField(doc, 'risk_observer', data.riskObserver);
+      // ★ تاريخ ووقت الرصد
+      if (data.riskDate) fillField(doc, 'risk_date', data.riskDate, true);
+      if (data.riskTime) fillField(doc, 'risk_time', data.riskTime);
+      // ★ اسم المدير
+      if (data.managerName) {
+        fillField(doc, 'risk_manager', data.managerName);
+        fillField(doc, 'risk_manager_date', data.riskDate || '', true);
+      }
       break;
 
     case 'eblagh_etha':
@@ -921,46 +989,66 @@ function fillFormData(doc: Document, formId: FormId, data: PrintFormData): void 
       fillField(doc, 'mashajara_location', data.location);
       fillField(doc, 'mashajara_initiator', data.initiator);
       fillField(doc, 'mashajara_desc', data.description);
-      // أضرار جسدية
+      // ★ الأضرار الجسدية (مصفوفة أو نص)
       if (Array.isArray(data.physicalDamage) && data.physicalDamage.length > 0) {
         const el = doc.getElementById('mashajara_physical');
         if (el) el.innerHTML = data.physicalDamage.map((d, i) => toIndic(i + 1) + '- ' + escapeHtml(d)).join('<br>');
       } else if (data.physicalDamage) {
         fillField(doc, 'mashajara_physical', data.physicalDamage as string);
       }
-      // أضرار مادية
+      // ★ الأضرار المادية (مصفوفة أو نص)
       if (Array.isArray(data.materialDamage) && data.materialDamage.length > 0) {
         const el = doc.getElementById('mashajara_material');
         if (el) el.innerHTML = data.materialDamage.map((d, i) => toIndic(i + 1) + '- ' + escapeHtml(d)).join('<br>');
       } else if (data.materialDamage) {
         fillField(doc, 'mashajara_material', data.materialDamage as string);
       }
-      // الأطراف
-      if (data.involvedStudents && data.involvedStudents.length > 0) {
-        const tbody = doc.getElementById('mashajara_involved');
-        if (tbody) {
-          tbody.innerHTML = '';
-          data.involvedStudents.forEach((s, i) => {
-            const tr = doc.createElement('tr');
-            tr.innerHTML = `<td class="indic-num">${toIndic(i + 1)}</td>`
-              + `<td style="text-align:right;padding-right:5px;">${escapeHtml(s.name)}</td>`
-              + `<td>${escapeHtml(s.grade)}</td>`
-              + `<td>${escapeHtml(s.role)}</td><td></td>`;
-            tbody.appendChild(tr);
-          });
+      // ★ محرر/محررو المحضر (دعم متعدد) — مطابق للأصلي
+      if (data.authors && data.authors.length > 0) {
+        fillField(doc, 'mashajara_author', data.authors[0].name);
+        fillField(doc, 'mashajara_author_role', data.authors[0].role);
+        fillField(doc, 'mashajara_author_date', data.date, true);
+        // إذا أكثر من محرر، إضافة بقية المحررين
+        if (data.authors.length > 1) {
+          const authEl = doc.getElementById('mashajara_author');
+          const authContainer = authEl?.parentElement;
+          if (authContainer) {
+            for (let ai = 1; ai < data.authors.length; ai++) {
+              const authDiv = doc.createElement('div');
+              authDiv.className = 'section-block align-right';
+              authDiv.style.marginTop = '5px';
+              authDiv.innerHTML = 'اسم مُحرِّر المحضر: <span class="data-field with-dots" style="min-width:60px;">' + escapeHtml(data.authors[ai].name) + '</span> الصفة: <span class="data-field with-dots" style="min-width:60px;">' + escapeHtml(data.authors[ai].role || '') + '</span> التوقيع: <span class="with-dots" style="min-width:60px;"></span>';
+              authContainer.parentNode?.insertBefore(authDiv, authContainer.nextSibling);
+            }
+          }
         }
+      } else {
+        fillField(doc, 'mashajara_author', data.authorName || '');
+        fillField(doc, 'mashajara_author_role', data.authorRole || '');
+        fillField(doc, 'mashajara_author_date', data.date, true);
       }
-      // الشهود
-      if (data.witnesses && data.witnesses.length > 0) {
-        const tbody = doc.getElementById('mashajara_witnesses');
-        if (tbody) {
-          tbody.innerHTML = '';
-          data.witnesses.forEach((w, i) => {
-            const tr = doc.createElement('tr');
-            tr.innerHTML = `<td class="indic-num">${toIndic(i + 1)}</td>`
-              + `<td style="text-align:right;padding-right:5px;">${escapeHtml(w)}</td><td></td>`;
-            tbody.appendChild(tr);
+      // ★ قائمة الطلاب ديناميكياً (حتى 12 طالب) مع أعمدة حسب العدد — مطابق للأصلي
+      {
+        const sc = doc.getElementById('mashajara_students_list');
+        if (sc && data.students && data.students.length > 0) {
+          const cnt = data.students.length;
+          const cols = cnt <= 3 ? 1 : (cnt <= 6 ? 2 : 3);
+          const minN = cols === 1 ? '60px' : (cols === 2 ? '40px' : '30px');
+          const minG = cols === 1 ? '40px' : (cols === 2 ? '25px' : '20px');
+          const fs = cols === 3 ? 'font-size:12pt;' : '';
+          let html = '<div style="display:flex;flex-wrap:wrap;gap:0;">';
+          data.students.forEach((s) => {
+            const w = cols === 1 ? '100%' : (cols === 2 ? '50%' : '33.33%');
+            html += '<div style="width:' + w + ';box-sizing:border-box;padding:2px 5px 2px 0;' + fs + '">';
+            html += 'الطالب: <span class="data-field with-dots" style="min-width:' + minN + ';">' + escapeHtml(s.name || '') + '</span> ';
+            html += 'الصف: <span class="data-field with-dots" style="min-width:' + minG + ';">' + toIndic(escapeHtml(s.grade || '')) + '</span>';
+            html += '</div>';
           });
+          html += '</div>';
+          sc.innerHTML = html;
+          // الطرفين أو الأطراف حسب العدد
+          const pw = doc.getElementById('mashajara_parties_word');
+          if (pw) pw.innerText = cnt > 2 ? 'الأطراف' : 'الطرفين';
         }
       }
       break;
