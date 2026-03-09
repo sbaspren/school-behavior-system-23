@@ -191,6 +191,7 @@ function AppContent() {
           </Routes>
         </main>
       </div>
+      <div id="print-container" />
     </div>
   );
 }

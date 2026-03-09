@@ -101,7 +101,7 @@ const Sidebar: React.FC<Props> = ({ open, role, schoolName }) => {
           flexShrink: 0,
         }}>
           <span className="material-symbols-outlined" style={{
-            fontSize: '20px', color: 'white',
+            fontSize: '28px', color: 'white',
             WebkitTextFillColor: 'white', background: 'none',
           }}>school</span>
         </div>
