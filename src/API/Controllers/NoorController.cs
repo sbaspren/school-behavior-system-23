@@ -573,6 +573,7 @@ public static class NoorMappings
         ["106"] = ("النوم داخل الفصل.", "1201075,الدرجة الأولى"),
         ["107"] = ("تكرار الخروج والدخول من البوابة.", "1201101,الدرجة الأولى"),
         ["108"] = ("التجمهر أمام بوابة المدرسة.", "1201077,الدرجة الأولى"),
+        ["109"] = ("تناول الأطعمة أو المشروبات أثناء الدرس بدون استئذان.", "1601176,الدرجة الأولى"),
         // الدرجة الثانية (4 مخالفات)
         ["201"] = ("عدم حضور الحصة أو الهروب منها.", "1201081,الدرجة الثانية"),
         ["202"] = ("الدخول أو الخروج من الفصل دون استئذان.", "1601190,الدرجة الثانية"),
@@ -940,7 +941,8 @@ public static class NoorMappings
 
     /// <summary>
     /// بحث ذكي في خريطة نور عن أقرب تطابق نصي
-    /// 3 مستويات: مباشر → تطبيع → جزئي (مطابق لـ findNoorMapping_ في Config.gs)
+    /// 4 مستويات: مباشر → تطبيع → جزئي (بدون أخرى) → أخرى fallback
+    /// مطابق لـ noorMatchPositive_ في JS_Noor.html + findNoorMapping_ في Config.gs
     /// </summary>
     public static (string? NoorText, string? NoorValue) FindNoorMapping(
         Dictionary<string, (string noorText, string noorValue)> map, string text)
@@ -960,11 +962,19 @@ public static class NoorMappings
                 return (kv.Value.noorText, kv.Value.noorValue);
         }
 
-        // 3. بحث جزئي (النص يحتوي على المفتاح أو العكس)
+        // 3. بحث جزئي — تخطي "أخرى" (مطابق لـ noorMatchPositive_)
         foreach (var kv in map)
         {
+            if (kv.Key.Contains("أخرى")) continue;
             var normKey = NormalizeArabicForMatch(kv.Key);
             if (norm.Contains(normKey) || normKey.Contains(norm))
+                return (kv.Value.noorText, kv.Value.noorValue);
+        }
+
+        // 4. fallback: "أخرى" — مطابق لـ return map['أخرى'] في noorMatchPositive_
+        foreach (var kv in map)
+        {
+            if (kv.Key.Contains("أخرى"))
                 return (kv.Value.noorText, kv.Value.noorValue);
         }
 

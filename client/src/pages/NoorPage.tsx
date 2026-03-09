@@ -66,6 +66,8 @@ const NoorPage: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [resultDetails, setResultDetails] = useState<{ name: string; grade: string; className: string; type: string; ok: boolean }[] | null>(null);
   const [absenceOverrides, setAbsenceOverrides] = useState<Record<number, string>>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [noorMappings, setNoorMappings] = useState<Record<string, any> | null>(null);
 
   // ════════════════════════════════════════
   // ★ حالة الاتصال بإضافة نور — مطابق لـ NOOR_STATE في JS_Noor.html
@@ -214,6 +216,11 @@ const NoorPage: React.FC = () => {
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadRecords(activeTab); }, [activeTab, loadRecords]);
+  useEffect(() => {
+    noorApi.getMappings().then(res => {
+      if (res.data?.data) setNoorMappings(res.data.data);
+    }).catch(() => {});
+  }, []);
 
   // ════════════════════════════════════════
   // تبديل التبويب
@@ -301,12 +308,16 @@ const NoorPage: React.FC = () => {
       setExtWorking(true);
       setExtProgress({ done: 0, total: recsWithOverrides.length, current: '' });
 
+      const stageKey = recsWithOverrides[0]?.stage || '';
+      const gradeMap = noorMappings?.grades?.[stageKey] || {};
+
       const sent = sendToExt({
         source: 'school-system',
         action: 'execute',
         operation: activeTab,
         records: recsWithOverrides,
-        stage: recsWithOverrides[0]?.stage || '',
+        stage: stageKey,
+        gradeMap,
       });
 
       if (!sent) {
@@ -865,21 +876,21 @@ const DegreeBadge: React.FC<{ degree: string }> = ({ degree }) => {
   );
 };
 
-const NoorStatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  if (status === 'تم') {
-    return <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '12px', fontWeight: 700, background: '#dcfce7', color: '#15803d' }}>تم</span>;
-  }
-  if (status === 'failed') {
-    return <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '12px', fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}>فشل</span>;
-  }
-  return <span style={{ padding: '3px 10px', borderRadius: '100px', fontSize: '12px', fontWeight: 700, background: '#fef3c7', color: '#d97706' }}>معلق</span>;
-};
-
 // حساب قيمة الغياب الافتراضية حسب البيانات — مطابق للأصلي noorMapAbsence_
 function getDefaultAbsenceValue(rec: NoorRecord): string {
+  // ★ أولاً: استخدم _noorValue من السيرفر إذا موجود
+  if (rec._noorValue) return rec._noorValue;
+
   const absType = String(rec.absenceType || '').trim();
   const excType = String(rec.excuseType || '').trim();
 
+  // فحص enum (من ASP.NET)
+  if (excType === 'PlatformExcused') return '800667,';
+  if (excType === 'PlatformUnexcused') return '1201153,';
+  if (excType === 'Excused') return '141,';
+  if (excType === 'Unexcused') return '48,';
+
+  // فحص النصوص العربية (fallback — من GAS الأصلي)
   if (excType.includes('منصة') || excType.includes('مدرستي') || absType.includes('منصة')) {
     if (excType.includes('بدون') || absType.includes('بدون')) return '1201153,';
     return '800667,';
