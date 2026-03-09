@@ -349,15 +349,16 @@ export default function TeacherFormPage() {
 
   if (loading) return (
     <div style={styles.loadingScreen}>
-      <div style={styles.spinner} />
-      <p style={{ color: '#6b7280', marginTop: 16 }}>جاري التحميل...</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ ...styles.spinner, animation: 'spin 1s linear infinite' }} />
+      <p style={{ marginTop: 16, color: '#666' }}>جاري التحميل...</p>
     </div>
   );
 
   if (error) return (
     <div style={styles.loadingScreen}>
       <div style={{ ...styles.iconWrap, background: 'linear-gradient(135deg,#fee2e2,#fecaca)' }}>
-        <span style={{ fontSize: 40, color: '#ef4444' }}>&#x26A0;</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 40, color: '#ef4444' }}>error</span>
       </div>
       <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1f2937', marginBottom: 8 }}>خطأ</h2>
       <p style={{ color: '#6b7280' }}>{error}</p>
@@ -366,10 +367,12 @@ export default function TeacherFormPage() {
 
   if (!pageData) return null;
 
+  const CLASS_ICONS = ['person', 'school', 'groups', 'diversity_3', 'group_work', 'family_restroom', 'badge', 'groups_2'];
   const deputyLabel = DEPUTY_LABELS[detectedStage] || 'الوكيل';
   const typeLabel = INPUT_TYPES.find(t => t.id === selectedType)?.label || '';
   const stageShort = STAGE_SHORT[detectedStage] || detectedStage;
   const stageFull = STAGE_LABELS[detectedStage] || detectedStage;
+  const classGridCols = pageData.cl.length >= 4 ? 'repeat(2, 1fr)' : '1fr';
 
   // Filter students by search
   const filteredStudents = students.filter(s =>
@@ -378,85 +381,102 @@ export default function TeacherFormPage() {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+      {/* ═══ الهيدر الثابت ═══ */}
       <div style={styles.header}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-          <div style={styles.logo}>ش</div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {pageData.sn || 'المدرسة'}
+        <div style={styles.headerInner}>
+          <div style={styles.schoolRow}>
+            <div style={styles.schoolIcon}>
+              <span className="material-symbols-outlined" style={{ fontSize: 24, color: 'white' }}>school</span>
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{pageData.t.n} • {pageData.t.s}</div>
+            <div>
+              <div style={styles.schoolName}>{pageData.sn || 'المدرسة'}</div>
+              <div style={styles.schoolSub}>نموذج إدخال المعلم</div>
+            </div>
+          </div>
+          <div style={styles.teacherRow}>
+            <div style={styles.teacherAvatar}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'white' }}>person</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={styles.teacherName}>{pageData.t.n}</div>
+              <div style={styles.teacherSubject}>{pageData.t.s}</div>
+            </div>
+            {detectedStage && <span style={styles.stageBadge}>{detectedStage}</span>}
           </div>
         </div>
-        {detectedStage && (
-          <span style={styles.stageBadge}>{detectedStage}</span>
-        )}
       </div>
 
-      {/* Back bar */}
+      {/* ═══ شريط زر الرجوع ═══ */}
       {step !== 1 && step !== 'success' && (
-        <div style={styles.backBar} onClick={goBack}>
-          <span style={{ fontSize: 18 }}>&#8594;</span> رجوع
+        <div style={styles.backBar}>
+          <button style={styles.backBarBtn} onClick={goBack}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span> رجوع
+          </button>
         </div>
       )}
 
+      {/* ═══ حاوية الخطوات ═══ */}
+      <div style={styles.stepsContainer}>
+
       {/* Step 1: Choose Class */}
-      {step === 1 && (
-        <div style={styles.stepPanel}>
+      <div style={step === 1 ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}><span style={styles.stepNum}>1</span> اختر الفصل</div>
+            <div style={styles.stepSubtitle}>اختر فصلك لبدء الإدخال</div>
           </div>
           <div style={styles.stepBody}>
-            <div style={styles.classGrid}>
-              {pageData.cl.map((c, i) => (
-                <div key={c.k} style={{
-                  ...styles.classCard,
-                  borderColor: selectedClass === c.d ? '#4f46e5' : '#e5e7eb',
-                  background: selectedClass === c.d ? '#eef2ff' : '#fff',
-                }} onClick={() => handleSelectClass(c.d || c.k)}>
-                  <div style={{ ...styles.typeIcon, background: ['#667eea','#3b82f6','#8b5cf6','#6366f1','#4f46e5'][i % 5] + '18' }}>
-                    <span style={{ fontSize: 26, color: ['#667eea','#3b82f6','#8b5cf6','#6366f1','#4f46e5'][i % 5] }}>&#x1F393;</span>
+            <div style={{ ...styles.classGrid, gridTemplateColumns: classGridCols }}>
+              {pageData.cl.map((c, i) => {
+                const isActive = selectedClass === (c.d || c.k);
+                const icon = CLASS_ICONS[i % CLASS_ICONS.length];
+                const color = ['#667eea','#3b82f6','#8b5cf6','#6366f1','#4f46e5'][i % 5];
+                return (
+                  <div key={c.k} style={{
+                    ...styles.classCard,
+                    ...(isActive ? styles.classCardActive : {}),
+                  }} onClick={() => handleSelectClass(c.d || c.k)}>
+                    <div style={{ ...styles.typeIcon, background: color + '18', margin: '0 auto 10px' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 26, color }}>{icon}</span>
+                    </div>
+                    <div style={styles.typeLabel}>{c.d}</div>
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1f2937' }}>{c.d}</div>
-                </div>
-              ))}
+                );
+              })}
               {pageData.cl.length === 0 && <p style={{ textAlign: 'center', color: '#9ca3af', padding: 16 }}>لا توجد فصول</p>}
             </div>
           </div>
         </div>
-      )}
 
       {/* Step 2: Choose Type */}
-      {step === 2 && (
-        <div style={styles.stepPanel}>
+      <div style={step === 2 ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}><span style={styles.stepNum}>2</span> نوع الإدخال</div>
+            <div style={styles.stepSubtitle}>اختر نوع البيانات التي تريد إدخالها</div>
           </div>
           <div style={styles.stepBody}>
-            {INPUT_TYPES.map(t => (
-              <div key={t.id} style={{
-                ...styles.typeCard,
-                borderColor: selectedType === t.id ? t.color : '#e5e7eb',
-                background: selectedType === t.id ? t.color + '10' : '#fff',
-              }} onClick={() => handleSelectType(t.id)}>
-                <div style={{ ...styles.typeIcon, background: t.color + '18' }}>
-                  <span style={{ fontSize: 26, color: t.color }}>{
-                    t.icon === 'event_busy' ? '&#x1F4C5;' :
-                    t.icon === 'gavel' ? '&#x2696;' :
-                    t.icon === 'menu_book' ? '&#x1F4D6;' : '&#x2B50;'
-                  }</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+            {INPUT_TYPES.map(t => {
+              const isActive = selectedType === t.id;
+              return (
+                <div key={t.id} style={{
+                  ...styles.typeCard,
+                  ...(isActive ? styles.typeCardActive : {}),
+                }} onClick={() => handleSelectType(t.id)}>
+                  <div style={{ ...styles.typeIcon, background: t.color + '18' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 26, color: t.color }}>{t.icon}</span>
+                  </div>
+                  <div style={styles.typeLabel}>{t.label}</div>
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#1f2937' }}>{t.label}</div>
-              </div>
-            ))}
+              );
+            })}
+            </div>
           </div>
         </div>
-      )}
 
       {/* Step 3: Choose Item */}
-      {step === 3 && (
-        <div style={styles.stepPanel}>
+      <div style={step === 3 ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}><span style={styles.stepNum}>3</span> {
               selectedType === 'absence' ? 'نوع الغياب' :
@@ -465,22 +485,22 @@ export default function TeacherFormPage() {
             }</div>
           </div>
           <div style={styles.stepBody}>
-            {/* Absence */}
+            {/* Absence — vertical cards */}
             {selectedType === 'absence' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
                 <div style={styles.absenceCard} onClick={() => handleSelectAbsenceType('يوم كامل')}>
-                  <span style={{ fontSize: 28 }}>&#x1F4C5;</span>
-                  <div>
-                    <p style={{ fontWeight: 700, color: '#1f2937', marginBottom: 4 }}>غياب يوم كامل</p>
-                    <p style={{ fontSize: 13, color: '#6b7280' }}>لادخال الغياب الرسمي خلال الحصة الاولى</p>
+                  <div style={styles.absenceIcon}>
+                    <span className="material-symbols-outlined" style={{ color: '#4f46e5', fontSize: 24 }}>event_busy</span>
                   </div>
+                  <p style={{ fontWeight: 700, color: '#1f2937', marginBottom: 6 }}>غياب يوم كامل</p>
+                  <p style={{ fontSize: 13, color: '#6b7280' }}>لادخال الغياب الرسمي خلال الحصة الاولى</p>
                 </div>
                 <div style={styles.absenceCard} onClick={() => handleSelectAbsenceType('حصة')}>
-                  <span style={{ fontSize: 28 }}>&#x23F0;</span>
-                  <div>
-                    <p style={{ fontWeight: 700, color: '#1f2937', marginBottom: 4 }}>غياب حصة</p>
-                    <p style={{ fontSize: 13, color: '#6b7280' }}>لادخال غياب الطالب عن حصة معينه</p>
+                  <div style={styles.absenceIcon}>
+                    <span className="material-symbols-outlined" style={{ color: '#4f46e5', fontSize: 24 }}>schedule</span>
                   </div>
+                  <p style={{ fontWeight: 700, color: '#1f2937', marginBottom: 6 }}>غياب حصة</p>
+                  <p style={{ fontSize: 13, color: '#6b7280' }}>لادخال غياب الطالب عن حصة معينه</p>
                 </div>
               </div>
             )}
@@ -492,8 +512,7 @@ export default function TeacherFormPage() {
                   {['حضوري', 'رقمي', 'هيئة تعليمية'].map(t => (
                     <div key={t} style={{
                       ...styles.subTypeBtn,
-                      background: violSubType === t ? '#4f46e5' : '#f3f4f6',
-                      color: violSubType === t ? '#fff' : '#374151',
+                      ...(violSubType === t ? styles.subTypeBtnActive : {}),
                     }} onClick={() => { setViolSubType(t); setSearchQuery(''); }}>
                       {t}
                       <span style={styles.countBadge}>
@@ -518,14 +537,16 @@ export default function TeacherFormPage() {
                   {['سلبية', 'إشادة'].map(t => (
                     <div key={t} style={{
                       ...styles.subTypeBtn,
-                      background: noteSubType === t ? '#4f46e5' : '#f3f4f6',
-                      color: noteSubType === t ? '#fff' : '#374151',
+                      ...(noteSubType === t ? styles.subTypeBtnActive : {}),
                     }} onClick={() => { setNoteSubType(t); setSearchQuery(''); }}>
                       {t}
+                      <span style={styles.countBadge}>
+                        {t === 'إشادة' ? (POSITIVE_NOTES[detectedStage] || []).length : NOTES.length}
+                      </span>
                     </div>
                   ))}
                 </div>
-                <input style={styles.searchInput} placeholder={noteSubType === 'إشادة' ? 'ابحث في الإشادات...' : 'ابحث في الملاحظات...'}
+                <input style={styles.searchInput} placeholder={noteSubType === 'إشادة' ? 'ابحث في الإشادات...' : 'ابحث في الملاحظات السلبية...'}
                   value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 <NotesList stage={detectedStage} subType={noteSubType} query={searchQuery}
                   selectedId={selectedItem?.id} onSelect={handleSelectNote} />
@@ -543,44 +564,39 @@ export default function TeacherFormPage() {
             )}
           </div>
         </div>
-      )}
 
       {/* Step 3b: Note details */}
-      {step === 'note-details' && (
-        <div style={styles.stepPanel}>
+      <div style={step === 'note-details' ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}><span style={styles.stepNum}>3ب</span> تفاصيل إضافية لولي الأمر (اختياري)</div>
-            <div style={{ fontSize: 13, color: '#6b7280' }}>أضف أي تفاصيل تريد إرسالها لولي الأمر، أو اضغط التالي للمتابعة</div>
+            <div style={styles.stepSubtitle}>أضف أي تفاصيل تريد إرسالها لولي الأمر، أو اضغط التالي للمتابعة بدون تفاصيل</div>
           </div>
-          <div style={{ ...styles.stepBody, flex: 1 }}>
-            <textarea style={styles.textarea} placeholder="أضف أي تفاصيل..." value={noteDetails}
+          <div style={{ ...styles.stepBody, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <textarea style={styles.textarea} placeholder="أضف أي تفاصيل تريد إرسالها لولي الأمر..." value={noteDetails}
               onChange={e => setNoteDetails(e.target.value)} />
           </div>
           <div style={styles.stepFooter}>
             <button style={styles.btnPrimary} onClick={handleConfirmNoteDetails}>التالي</button>
           </div>
         </div>
-      )}
 
       {/* Step 3b: Positive details */}
-      {step === 'positive-details' && (
-        <div style={styles.stepPanel}>
+      <div style={step === 'positive-details' ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}><span style={styles.stepNum}>3ب</span> تفاصيل إضافية (اختياري)</div>
+            <div style={styles.stepSubtitle}>أضف تفاصيل أو اكتب سلوكاً متمايزاً مخصصاً، أو اضغط التالي للمتابعة</div>
           </div>
-          <div style={{ ...styles.stepBody, flex: 1 }}>
-            <textarea style={styles.textarea} placeholder="أضف تفاصيل إضافية..." value={positiveDetails}
+          <div style={{ ...styles.stepBody, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <textarea style={styles.textarea} placeholder="أضف تفاصيل أو اكتب سلوكاً متمايزاً لم يكن في القائمة..." value={positiveDetails}
               onChange={e => setPositiveDetails(e.target.value)} />
           </div>
           <div style={styles.stepFooter}>
             <button style={styles.btnPrimary} onClick={handleConfirmPositiveDetails}>التالي</button>
           </div>
         </div>
-      )}
 
       {/* Step 4: Select Students */}
-      {step === 4 && (
-        <div style={styles.stepPanel}>
+      <div style={step === 4 ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}>
               <span style={styles.stepNum}>4</span> اختر الطلاب
@@ -591,45 +607,44 @@ export default function TeacherFormPage() {
             {/* No absence button */}
             {selectedType === 'absence' && (
               <div style={styles.noAbsenceBtn} onClick={handleConfirmNoAbsence}>
-                <span style={{ color: '#22c55e', fontSize: 24 }}>&#x2705;</span>
-                <span style={{ fontWeight: 800, color: '#166534', fontSize: 15 }}>لا يوجد غائب</span>
+                <span className="material-symbols-outlined" style={{ color: '#22c55e', fontSize: 24 }}>check_circle</span>
+                <span style={{ fontWeight: 800, color: '#166534', fontSize: 15 }}>لا يوجد غائب ✅</span>
               </div>
             )}
 
             <input style={styles.searchInput} placeholder="ابحث عن طالب..." value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)} />
             <div style={styles.selectAllBar}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input type="checkbox" checked={selectedStudents.length === students.length && students.length > 0}
+              <label style={styles.selectAllLabel}>
+                <input type="checkbox" style={{ width: 20, height: 20, accentColor: '#4f46e5', cursor: 'pointer' }}
+                  checked={selectedStudents.length === students.length && students.length > 0}
                   onChange={handleSelectAll} />
                 تحديد الكل
               </label>
-              <span style={{ fontSize: 13, color: '#6b7280' }}>{selectedStudents.length} محدد</span>
+              <span style={styles.selectedCount}>{selectedStudents.length} محدد</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div>
               {filteredStudents.map(s => {
                 const sel = selectedStudents.includes(s.i);
                 return (
                   <div key={s.i} style={{
                     ...styles.studentItem,
-                    background: sel ? '#eef2ff' : '#fff',
-                    borderColor: sel ? '#4f46e5' : '#e5e7eb',
+                    ...(sel ? styles.studentItemSelected : {}),
                   }} onClick={() => handleToggleStudent(s.i)}>
                     <div style={styles.studentAvatar}>
-                      <span style={{ fontSize: 20, color: '#6366f1' }}>&#x1F464;</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>person</span>
                     </div>
                     <div style={{ flex: 1 }}>
-                      <p style={{ fontWeight: 700, color: '#1f2937', fontSize: 14 }}>{s.n}</p>
-                      <p style={{ fontSize: 12, color: '#9ca3af' }}>{s.i}</p>
+                      <p style={{ fontWeight: 700, color: '#1f2937', fontSize: 14, margin: 0 }}>{s.n}</p>
+                      <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>{s.i}</p>
                     </div>
                     <div style={{
                       width: 24, height: 24, borderRadius: '50%', border: '2px solid',
                       borderColor: sel ? '#4f46e5' : '#d1d5db',
                       background: sel ? '#4f46e5' : 'transparent',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 14,
                     }}>
-                      {sel && '✓'}
+                      {sel && <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'white' }}>check</span>}
                     </div>
                   </div>
                 );
@@ -644,15 +659,13 @@ export default function TeacherFormPage() {
             </button>
           </div>
         </div>
-      )}
 
       {/* Step 5: Summary & Submit */}
-      {step === 5 && (
-        <div style={styles.stepPanel}>
+      <div style={step === 5 ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.stepHeader}>
             <div style={styles.stepTitle}><span style={styles.stepNum}>5</span> ملخص وإرسال</div>
           </div>
-          <div style={styles.stepBody}>
+          <div style={{ ...styles.stepBody, display: 'flex', flexDirection: 'column' }}>
             <div style={styles.summaryBox}>
               {noAbsence ? (
                 <>
@@ -676,23 +689,23 @@ export default function TeacherFormPage() {
                 </>
               )}
             </div>
-            <button style={{ ...styles.btnPrimary, opacity: submitting ? 0.6 : 1 }} disabled={submitting}
+            <button style={{ ...styles.btnPrimary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}
               onClick={handleSubmit}>
-              {submitting ? 'جاري الإرسال...' : `إرسال إلى ${deputyLabel}`}
+              {submitting ? (
+                <><span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: 20, verticalAlign: 'middle' }}>sync</span> جاري الإرسال...</>
+              ) : `إرسال إلى ${deputyLabel}`}
             </button>
           </div>
         </div>
-      )}
 
       {/* Success */}
-      {step === 'success' && (
-        <div style={styles.stepPanel}>
+      <div style={step === 'success' ? styles.stepPanelActive : styles.stepPanel}>
           <div style={styles.successWrap}>
-            <div style={{ ...styles.iconWrap, background: 'linear-gradient(135deg,#d1fae5,#bbf7d0)' }}>
-              <span style={{ fontSize: 40, color: '#22c55e' }}>&#x2705;</span>
+            <div style={{ ...styles.iconWrap, background: 'linear-gradient(135deg,#e0e7ff,#f3e8ff)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 40, color: '#4f46e5' }}>check_circle</span>
             </div>
             <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1f2937', marginBottom: 8 }}>تم الإرسال بنجاح!</h2>
-            <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14 }}>{successMsg}</p>
+            <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14 }}>{successMsg || 'تم إرسال البيانات للوكيل'}</p>
             <div style={styles.summaryBox}>
               {noAbsence ? (
                 <>
@@ -709,12 +722,20 @@ export default function TeacherFormPage() {
                 </>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 16, width: '100%' }}>
+            <div style={{ width: '100%', flexShrink: 0, marginTop: 12 }}>
               <button style={styles.btnPrimary} onClick={resetForm}>إدخال مرة أخرى</button>
+              <button style={styles.btnExit} onClick={() => {
+                try { window.close(); } catch {}
+                document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;font-family:Cairo,sans-serif;direction:rtl"><div style="width:80px;height:80px;background:#fef2f2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><span class="material-symbols-outlined" style="font-size:40px;color:#dc2626">logout</span></div><h2 style="font-size:20px;font-weight:800;color:#1f2937;margin-bottom:8px">تم الخروج</h2><p style="color:#6b7280">يمكنك إغلاق هذه النافذة يدوياً</p></div>';
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>logout</span>
+                خروج
+              </button>
             </div>
           </div>
         </div>
-      )}
+
+      </div>{/* end steps-container */}
     </div>
   );
 }
@@ -725,7 +746,7 @@ export default function TeacherFormPage() {
 
 function SummaryRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: 15, borderBottom: '1px solid #f3f4f6' }}>
       <span style={{ color: '#6b7280' }}>{label}:</span>
       <span style={{ fontWeight: 700, color: valueColor || '#1f2937', fontSize: 13 }}>{value}</span>
     </div>
@@ -750,12 +771,13 @@ function ViolationsList({ stage, subType, query, selectedId, onSelect }: {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div>
       {[1, 2, 3, 4, 5].map(deg => {
         if (!groups[deg]) return null;
         return (
-          <div key={deg}>
+          <div key={deg} style={{ marginBottom: 8 }}>
             <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 12px', borderRadius: 8, fontWeight: 700, fontSize: 13, marginBottom: 6,
               background: DEGREE_COLORS[deg], color: DEGREE_TEXT[deg],
             }}>
@@ -763,15 +785,18 @@ function ViolationsList({ stage, subType, query, selectedId, onSelect }: {
             </div>
             {groups[deg].map(v => {
               const ed = effectiveDeg(v, stage);
+              const sel = selectedId === v.id;
               return (
                 <div key={v.id} style={{
-                  ...styles.itemRow,
-                  borderColor: selectedId === v.id ? '#4f46e5' : '#e5e7eb',
-                  background: selectedId === v.id ? '#eef2ff' : '#fff',
+                  padding: '14px 16px', background: sel ? '#eef2ff' : 'white', borderRadius: 12,
+                  marginBottom: 8, border: `2px solid ${sel ? '#4f46e5' : '#e5e7eb'}`,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between', gap: 10, touchAction: 'manipulation',
                 }} onClick={() => onSelect(v)}>
-                  <p style={{ flex: 1, margin: 0, fontSize: 14 }}>{v.text}</p>
+                  <p style={{ fontWeight: 600, color: '#1f2937', fontSize: 13, flex: 1, margin: 0 }}>{v.text}</p>
                   <span style={{
-                    ...styles.degreeBadge,
+                    display: 'inline-block', padding: '3px 10px', borderRadius: 14,
+                    fontSize: 11, fontWeight: 700, flexShrink: 0,
                     background: DEGREE_COLORS[ed], color: DEGREE_TEXT[ed],
                   }}>{ed}</span>
                 </div>
@@ -794,22 +819,27 @@ function NotesList({ stage, subType, query, selectedId, onSelect }: {
     : NOTES.filter(n => !query || n.text.includes(query));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {items.map(n => (
-        <div key={n.id} style={{
-          ...styles.itemRow,
-          borderColor: selectedId === n.id ? '#4f46e5' : '#e5e7eb',
-          background: selectedId === n.id ? '#eef2ff' : '#fff',
-        }} onClick={() => onSelect(n)}>
-          <p style={{ flex: 1, margin: 0, fontSize: 14 }}>{n.text}</p>
-          <span style={{
-            ...styles.degreeBadge,
-            background: subType === 'إشادة' ? '#bbf7d0' : '#fecaca',
-            color: subType === 'إشادة' ? '#16a34a' : '#dc2626',
-            border: `1px solid ${subType === 'إشادة' ? '#86efac' : '#fca5a5'}`,
-          }}>{subType === 'إشادة' ? 'إشادة' : 'سلبية'}</span>
-        </div>
-      ))}
+    <div>
+      {items.map(n => {
+        const sel = selectedId === n.id;
+        return (
+          <div key={n.id} style={{
+            padding: '14px 16px', background: sel ? '#eef2ff' : 'white', borderRadius: 12,
+            marginBottom: 8, border: `2px solid ${sel ? '#4f46e5' : '#e5e7eb'}`,
+            cursor: 'pointer', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', gap: 10, touchAction: 'manipulation',
+          }} onClick={() => onSelect(n)}>
+            <p style={{ fontWeight: 600, color: '#1f2937', fontSize: 13, flex: 1, margin: 0 }}>{n.text}</p>
+            <span style={{
+              display: 'inline-block', padding: '3px 10px', borderRadius: 14,
+              fontSize: 11, fontWeight: 700, flexShrink: 0,
+              background: subType === 'إشادة' ? '#bbf7d0' : '#fecaca',
+              color: subType === 'إشادة' ? '#16a34a' : '#dc2626',
+              border: `1px solid ${subType === 'إشادة' ? '#86efac' : '#fca5a5'}`,
+            }}>{subType === 'إشادة' ? 'إشادة' : 'سلبية'}</span>
+          </div>
+        );
+      })}
       {items.length === 0 && <p style={{ textAlign: 'center', color: '#9ca3af', padding: 20 }}>لا توجد نتائج</p>}
     </div>
   );
@@ -824,21 +854,27 @@ function PositiveList({ query, selectedId, onSelect }: {
   const items = POSITIVE.filter(p => !query || p.text.includes(query));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {items.map(p => (
-        <div key={p.id} style={{
-          ...styles.itemRow,
-          borderColor: selectedId === p.id ? '#4f46e5' : '#e5e7eb',
-          background: selectedId === p.id ? '#eef2ff' : '#fff',
-        }} onClick={() => onSelect(p)}>
-          <p style={{ flex: 1, margin: 0, fontSize: 14 }}>{p.text}</p>
-          <span style={{
-            ...styles.degreeBadge,
-            background: gColors[p.degree] || '#d1fae5',
-            color: gText[p.degree] || '#065f46',
-          }}>{p.degree}</span>
-        </div>
-      ))}
+    <div>
+      {items.map(p => {
+        const sel = selectedId === p.id;
+        return (
+          <div key={p.id} style={{
+            padding: '14px 16px', background: sel ? '#eef2ff' : 'white', borderRadius: 12,
+            marginBottom: 8, border: `2px solid ${sel ? '#4f46e5' : '#e5e7eb'}`,
+            cursor: 'pointer', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', gap: 10, touchAction: 'manipulation',
+          }} onClick={() => onSelect(p)}>
+            <p style={{ fontWeight: 600, color: '#1f2937', fontSize: 13, flex: 1, margin: 0 }}>{p.text}</p>
+            <span style={{
+              display: 'inline-block', padding: '3px 10px', borderRadius: 14,
+              fontSize: 11, fontWeight: 700, flexShrink: 0,
+              background: gColors[p.degree] || '#d1fae5',
+              color: gText[p.degree] || '#065f46',
+              border: `1px solid ${(gText[p.degree] || '#065f46') + '33'}`,
+            }}>{p.degree}</span>
+          </div>
+        );
+      })}
       {items.length === 0 && <p style={{ textAlign: 'center', color: '#9ca3af', padding: 20 }}>لا توجد نتائج</p>}
     </div>
   );
@@ -848,141 +884,233 @@ function PositiveList({ query, selectedId, onSelect }: {
 // Styles
 // ═══════════════════════════════════════════
 
+const FONT = "'Cairo', sans-serif";
+
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    direction: 'rtl', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif",
-    maxWidth: 480, margin: '0 auto', minHeight: '100vh',
-    background: '#f0f2f5', display: 'flex', flexDirection: 'column',
+    direction: 'rtl', fontFamily: FONT,
+    maxWidth: 480, margin: '0 auto', height: '100vh',
+    background: '#f3f4f6', display: 'flex', flexDirection: 'column',
+    overflow: 'hidden', WebkitTapHighlightColor: 'transparent',
   },
   header: {
-    background: 'linear-gradient(135deg, #667eea, #764ba2)',
-    padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    padding: '14px 16px', flexShrink: 0,
   },
-  logo: {
-    width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: '#fff', fontWeight: 800, fontSize: 18,
+  headerInner: {
+    display: 'flex', flexDirection: 'column' as const, alignItems: 'stretch',
   },
+  schoolRow: {
+    display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-start',
+  },
+  schoolIcon: {
+    width: 44, height: 44, background: 'rgba(255,255,255,0.2)', borderRadius: 12,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  schoolName: { fontSize: 15, fontWeight: 800, color: 'white', whiteSpace: 'nowrap' as const },
+  schoolSub: { fontSize: 11, color: 'rgba(255,255,255,0.8)', whiteSpace: 'nowrap' as const },
+  teacherRow: {
+    marginTop: 10, display: 'flex', alignItems: 'center', gap: 10,
+    padding: '8px 12px', background: 'rgba(255,255,255,0.12)',
+    borderRadius: 12, border: '1px solid rgba(255,255,255,0.15)',
+  },
+  teacherAvatar: {
+    width: 36, height: 36, background: 'rgba(255,255,255,0.2)', borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  teacherName: { fontWeight: 700, color: 'white', fontSize: 14 },
+  teacherSubject: { fontSize: 11, color: 'rgba(255,255,255,0.7)' },
   stageBadge: {
-    background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '4px 12px',
-    borderRadius: 20, fontSize: 12, fontWeight: 700,
+    display: 'inline-block', padding: '2px 10px', borderRadius: 16,
+    fontSize: 10, fontWeight: 700, marginRight: 6,
+    background: 'rgba(255,255,255,0.2)', color: '#e0e7ff',
   },
   backBar: {
-    padding: '10px 20px', background: '#fff', borderBottom: '1px solid #e5e7eb',
-    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-    fontSize: 14, fontWeight: 600, color: '#4f46e5',
+    padding: '8px 16px', background: '#f3f4f6', flexShrink: 0,
+    borderBottom: '1px solid #e5e7eb',
   },
+  backBarBtn: {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: '6px 14px', border: '2px solid #e5e7eb', background: 'white',
+    color: '#6b7280', borderRadius: 10, fontSize: 13, fontWeight: 700,
+    fontFamily: FONT, cursor: 'pointer', touchAction: 'manipulation' as const,
+  },
+  stepsContainer: { flex: 1, overflow: 'hidden', position: 'relative' as const },
   stepPanel: {
-    flex: 1, display: 'flex', flexDirection: 'column',
+    position: 'absolute' as const, inset: 0, display: 'flex', flexDirection: 'column' as const,
+    background: '#f3f4f6', opacity: 0, pointerEvents: 'none' as const,
+    transition: 'opacity .2s ease',
   },
-  stepHeader: {
-    padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#fff',
+  stepPanelActive: {
+    position: 'absolute' as const, inset: 0, display: 'flex', flexDirection: 'column' as const,
+    background: '#f3f4f6', opacity: 1, pointerEvents: 'auto' as const, zIndex: 1,
   },
+  stepHeader: { padding: '16px 16px 12px', flexShrink: 0 },
   stepTitle: {
-    fontWeight: 800, fontSize: 16, color: '#1f2937', display: 'flex', alignItems: 'center', gap: 8,
+    fontSize: 18, fontWeight: 800, color: '#1f2937',
+    display: 'flex', alignItems: 'center', gap: 10,
   },
   stepNum: {
-    width: 28, height: 28, borderRadius: '50%', background: '#4f46e5', color: '#fff',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 13, fontWeight: 800,
+    width: 30, height: 30,
+    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+    color: 'white', borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 14, fontWeight: 800, flexShrink: 0,
   },
+  stepSubtitle: { fontSize: 13, color: '#6b7280', marginTop: 4, marginRight: 40 },
   stepBody: {
-    padding: 16, flex: 1, overflowY: 'auto' as const,
+    flex: 1, overflowY: 'auto' as const, padding: '0 16px 16px',
+    WebkitOverflowScrolling: 'touch' as any,
   },
   stepFooter: {
-    padding: '12px 16px', borderTop: '1px solid #e5e7eb', background: '#fff',
+    padding: '12px 16px', flexShrink: 0, background: 'white',
+    borderTop: '1px solid #e5e7eb',
   },
   classGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12,
+    display: 'grid', gap: 12,
   },
   classCard: {
-    padding: 16, borderRadius: 16, border: '2px solid #e5e7eb', cursor: 'pointer',
-    display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 8,
-    transition: 'all 0.15s',
+    background: 'white', border: '2px solid #e5e7eb', borderRadius: 16,
+    padding: '20px 12px', textAlign: 'center' as const, cursor: 'pointer',
+    transition: 'all .15s', touchAction: 'manipulation' as const,
+  },
+  classCardActive: {
+    background: 'linear-gradient(135deg, #f5f3ff, #eef2ff)',
+    border: '2px solid #4f46e5',
+    boxShadow: '0 0 0 3px rgba(79,70,229,0.1)',
   },
   typeCard: {
-    padding: 16, borderRadius: 14, border: '2px solid #e5e7eb', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8,
-    transition: 'all 0.15s',
+    background: 'white', border: '2px solid #e5e7eb', borderRadius: 16,
+    padding: '16px 20px', textAlign: 'right' as const, cursor: 'pointer',
+    transition: 'all .15s', touchAction: 'manipulation' as const,
+    display: 'flex', alignItems: 'center', gap: 14, marginBottom: 10,
+  },
+  typeCardActive: {
+    borderColor: '#4f46e5', background: 'linear-gradient(135deg, #f5f3ff, #eef2ff)',
+    boxShadow: '0 0 0 3px rgba(79,70,229,0.1)',
   },
   typeIcon: {
-    width: 48, height: 48, borderRadius: 14, display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
+    width: 48, height: 48, borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
+  typeLabel: { fontSize: 15, fontWeight: 700, color: '#1f2937' },
   absenceCard: {
-    padding: 16, borderRadius: 14, border: '2px solid #e5e7eb', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 16, background: '#fff',
+    display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+    textAlign: 'center' as const, padding: '24px 20px',
+    background: '#eef2ff', border: '2px solid #c7d2fe', borderRadius: 14,
+    cursor: 'pointer', touchAction: 'manipulation' as const, transition: 'all .15s',
   },
-  subTypeBtns: {
-    display: 'flex', gap: 8, marginBottom: 12,
+  absenceIcon: {
+    width: 48, height: 48, background: '#c7d2fe', borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12,
   },
+  subTypeBtns: { display: 'flex', gap: 8, marginBottom: 12 },
   subTypeBtn: {
-    flex: 1, padding: '10px 8px', borderRadius: 10, textAlign: 'center' as const,
-    fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex',
-    alignItems: 'center', justifyContent: 'center', gap: 6,
+    flex: 1, padding: '10px 6px', border: '2px solid #e5e7eb', borderRadius: 12,
+    textAlign: 'center' as const, cursor: 'pointer', background: 'white',
+    fontSize: 12, fontWeight: 700, touchAction: 'manipulation' as const,
+    fontFamily: FONT,
+  },
+  subTypeBtnActive: {
+    borderColor: '#4f46e5', background: '#eef2ff', color: '#4f46e5',
   },
   countBadge: {
-    fontSize: 11, opacity: 0.7,
+    display: 'block', fontSize: 11, fontWeight: 500, color: '#9ca3af', marginTop: 2,
   },
   searchInput: {
-    width: '100%', padding: '10px 14px', border: '2px solid #e5e7eb', borderRadius: 14,
-    fontSize: 14, marginBottom: 12, boxSizing: 'border-box' as const,
-    fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", direction: 'rtl' as const,
+    width: '100%', padding: '12px 16px', border: '2px solid #e5e7eb', borderRadius: 12,
+    fontSize: 15, fontFamily: FONT, marginBottom: 10,
+    outline: 'none', touchAction: 'manipulation' as const,
+    boxSizing: 'border-box' as const, direction: 'rtl' as const,
   },
   itemRow: {
-    padding: '12px 14px', borderRadius: 10, border: '2px solid #e5e7eb', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4,
+    padding: '14px 16px', background: 'white', borderRadius: 12, marginBottom: 8,
+    border: '2px solid #e5e7eb', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    touchAction: 'manipulation' as const,
+  },
+  itemRowSelected: {
+    borderColor: '#4f46e5', background: '#eef2ff',
   },
   degreeBadge: {
-    padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' as const,
+    display: 'inline-block', padding: '3px 10px', borderRadius: 14,
+    fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' as const,
   },
   noAbsenceBtn: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
     padding: 14, background: '#f0fdf4', border: '2px solid #86efac', borderRadius: 12,
-    cursor: 'pointer', marginBottom: 12,
+    cursor: 'pointer', touchAction: 'manipulation' as const, marginBottom: 12,
   },
   selectAllBar: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '8px 0', marginBottom: 8,
+    padding: '12px 16px', background: 'white', borderRadius: 12,
+    marginBottom: 10, border: '2px solid #e5e7eb',
   },
+  selectAllLabel: {
+    display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+    fontSize: 14, fontWeight: 600, touchAction: 'manipulation' as const,
+  },
+  selectedCount: { fontSize: 14, color: '#4f46e5', fontWeight: 700 },
   studentItem: {
-    padding: '10px 12px', borderRadius: 12, border: '1px solid #e5e7eb', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', gap: 12,
+    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+    background: 'white', borderRadius: 12, marginBottom: 8,
+    border: '2px solid #e5e7eb', cursor: 'pointer',
+    touchAction: 'manipulation' as const,
+  },
+  studentItemSelected: {
+    borderColor: '#4f46e5', background: '#eef2ff',
   },
   studentAvatar: {
     width: 40, height: 40, background: '#eef2ff', borderRadius: '50%',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
+  summaryRow: {
+    display: 'flex', justifyContent: 'space-between', padding: '12px 0',
+    fontSize: 15,
+  },
   summaryBox: {
-    background: 'white', borderRadius: 14, padding: 16, border: '2px solid #e5e7eb', marginBottom: 16,
-    width: '100%',
+    background: 'white', borderRadius: 14, padding: 16, border: '2px solid #e5e7eb',
+    marginBottom: 16, width: '100%',
   },
   btnPrimary: {
-    width: '100%', padding: '14px 0', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff',
-    border: 'none', borderRadius: 14, fontSize: 17, fontWeight: 800, cursor: 'pointer',
-    fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif",
-    boxShadow: '0 4px 14px rgba(102,126,234,0.35)',
+    width: '100%', padding: 16, border: 'none', borderRadius: 14,
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white', fontSize: 16, fontWeight: 700, fontFamily: FONT,
+    cursor: 'pointer', boxShadow: '0 4px 14px rgba(102,126,234,0.35)',
+    touchAction: 'manipulation' as const,
+  },
+  btnExit: {
+    width: '100%', padding: 14, border: '2px solid #ef4444', borderRadius: 14,
+    background: '#fef2f2', color: '#ef4444', fontSize: 15, fontWeight: 700,
+    fontFamily: FONT, cursor: 'pointer', touchAction: 'manipulation' as const,
+    marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
   },
   textarea: {
-    width: '100%', minHeight: 120, padding: 14, border: '2px solid #e5e7eb',
-    borderRadius: 12, fontSize: 14, resize: 'vertical' as const, boxSizing: 'border-box' as const,
-    fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif", direction: 'rtl' as const,
+    width: '100%', minHeight: 220, padding: 16, border: '2px solid #e5e7eb',
+    borderRadius: 14, fontFamily: FONT, fontSize: 16,
+    outline: 'none', resize: 'vertical' as const, touchAction: 'manipulation' as const,
+    lineHeight: 1.6, boxSizing: 'border-box' as const, direction: 'rtl' as const,
   },
   loadingScreen: {
-    display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
-    justifyContent: 'center', minHeight: '100vh', fontFamily: "'Segoe UI', 'Tahoma', 'Arial', sans-serif",
-    direction: 'rtl' as const,
+    position: 'fixed' as const, inset: 0,
+    background: 'rgba(255,255,255,0.95)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 100, flexDirection: 'column' as const,
+    fontFamily: FONT, direction: 'rtl' as const,
   },
   iconWrap: {
-    width: 64, height: 64, borderRadius: '50%', display: 'flex',
+    width: 80, height: 80, borderRadius: '50%', display: 'flex',
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   successWrap: {
     display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
-    justifyContent: 'center', padding: 24, flex: 1,
+    justifyContent: 'center', minHeight: '100%', padding: '32px 16px',
+    textAlign: 'center' as const, overflowY: 'auto' as const,
+    WebkitOverflowScrolling: 'touch' as any,
   },
   spinner: {
-    width: 40, height: 40, border: '4px solid #e5e7eb', borderTopColor: '#4f46e5',
-    borderRadius: '50%', animation: 'spin 1s linear infinite',
+    width: 48, height: 48, border: '4px solid #e5e7eb', borderTopColor: '#667eea',
+    borderRadius: '50%',
   },
 };
