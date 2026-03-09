@@ -4,6 +4,7 @@ import { studentsApi } from '../api/students';
 import { settingsApi, StageConfigData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
+import { printForm } from '../utils/printTemplates';
 
 const THEME = '#059669'; // emerald-600
 
@@ -334,6 +335,7 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
                       ) : (
                         <button onClick={() => handleSendWhatsApp(r)} style={{ padding: '2px 8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '100px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>إرسال</button>
                       )}
+                      <button onClick={() => { printForm('tawtheeq_tawasol', { studentName: r.studentName, grade: r.grade + ' / ' + r.className, contactType: 'ملاحظة تربوية', contactReason: (r.noteType || '') + (r.details ? ' - ' + r.details : ''), violationDate: r.hijriDate || '', contactResult: r.isSent ? 'تم التواصل عبر الواتساب' : 'لم يتم الإرسال بعد', notes: 'المسجّل: ' + (r.teacherName || '-') }); }} style={{ padding: '2px 6px', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }} title="توثيق تواصل">📞</button>
                       <button onClick={() => handleDelete(r.id)} style={{ padding: '2px 6px', background: '#fef2f2', color: '#dc2626', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>حذف</button>
                     </div>
                   </td>
@@ -589,6 +591,7 @@ const ApprovedTab: React.FC<{ stage: string; noteTypes: string[] }> = ({ stage, 
                       : <span style={{ padding: '2px 8px', background: '#fff7ed', color: '#9a3412', borderRadius: '100px', fontSize: '10px', fontWeight: 700 }}>لم يُرسل</span>
                     }
                     <span style={{ fontSize: '11px', color: '#9ca3af' }}>{n.teacherName || ''}</span>
+                    <button onClick={() => { printForm('tawtheeq_tawasol', { studentName: detailStudent.name, grade: detailStudent.grade + ' / ' + detailStudent.cls, contactType: 'ملاحظة تربوية', contactReason: n.noteType + (n.details ? ' - ' + n.details : ''), violationDate: n.hijriDate || '', contactResult: n.isSent ? 'تم التواصل عبر الواتساب' : 'لم يتم الإرسال بعد', notes: 'المسجّل: ' + (n.teacherName || '-') }); }} style={{ padding: '2px 8px', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>📞 توثيق تواصل</button>
                   </div>
                 </div>
               ))}
