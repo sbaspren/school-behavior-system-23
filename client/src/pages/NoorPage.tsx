@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { noorApi, NoorStatusUpdate } from '../api/noor';
 import { showSuccess, showError } from '../components/shared/Toast';
 
@@ -66,6 +66,120 @@ const NoorPage: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [resultDetails, setResultDetails] = useState<{ name: string; grade: string; className: string; type: string; ok: boolean }[] | null>(null);
   const [absenceOverrides, setAbsenceOverrides] = useState<Record<number, string>>({});
+
+  // ════════════════════════════════════════
+  // ★ حالة الاتصال بإضافة نور — مطابق لـ NOOR_STATE في JS_Noor.html
+  // ════════════════════════════════════════
+  const [extConnected, setExtConnected] = useState(false);
+  const [extUserName, setExtUserName] = useState('');
+  const [extWorking, setExtWorking] = useState(false);
+  const [extProgress, setExtProgress] = useState({ done: 0, total: 0, current: '' });
+  const bridgeInboxRef = useRef<HTMLDivElement | null>(null);
+  const bridgeOutboxRef = useRef<HTMLDivElement | null>(null);
+
+  // ════════════════════════════════════════
+  // ★ جسر إضافة كروم — مطابق لـ _noorFindBridge / _noorSendToExt في JS_Noor.html
+  // ════════════════════════════════════════
+  const findBridge = useCallback(() => {
+    bridgeInboxRef.current = document.getElementById('noor-bridge-inbox') as HTMLDivElement;
+    bridgeOutboxRef.current = document.getElementById('noor-bridge-outbox') as HTMLDivElement;
+    // محاولة parent (لو في iframe)
+    if (!bridgeInboxRef.current) {
+      try { bridgeInboxRef.current = window.parent.document.getElementById('noor-bridge-inbox') as HTMLDivElement; } catch { /* */ }
+    }
+    if (!bridgeOutboxRef.current) {
+      try { bridgeOutboxRef.current = window.parent.document.getElementById('noor-bridge-outbox') as HTMLDivElement; } catch { /* */ }
+    }
+  }, []);
+
+  const sendToExt = useCallback((data: Record<string, unknown>) => {
+    findBridge();
+    if (!bridgeInboxRef.current) return false;
+    bridgeInboxRef.current.textContent = JSON.stringify(data);
+    return true;
+  }, [findBridge]);
+
+  // ★ معالجة رسائل الإضافة — مطابق لـ _noorHandleExtMessage في JS_Noor.html
+  const handleExtMessage = useCallback((data: Record<string, unknown>) => {
+    if (!data?.action) return;
+    switch (data.action) {
+      case 'connected':
+        setExtConnected(true);
+        setExtUserName(String(data.userName || ''));
+        showSuccess('تم الاتصال بنور عبر الإضافة — جاهز للتوثيق');
+        break;
+      case 'progress':
+        setExtProgress({ done: Number(data.done || 0), total: Number(data.total || 0), current: String(data.current || '') });
+        break;
+      case 'done': {
+        setExtWorking(false);
+        const results = data.results as { success: number; failed: number; updates: { rowIndex: number; type: string; status: string }[] } | undefined;
+        if (results?.updates) {
+          // تحديث حالة نور في قاعدة البيانات
+          const apiUpdates: NoorStatusUpdate[] = results.updates.map(u => ({
+            id: u.rowIndex, type: u.type, status: u.status,
+          }));
+          noorApi.updateStatus(apiUpdates).catch(() => {});
+        }
+        const successCount = results?.success || 0;
+        const failedCount = results?.failed || 0;
+        showSuccess(`تم التوثيق: ${successCount} نجح${failedCount > 0 ? ` | ${failedCount} فشل` : ''}`);
+        loadRecords(activeTab);
+        loadStats();
+        break;
+      }
+      case 'error':
+        setExtWorking(false);
+        showError('خطأ: ' + String(data.message || ''));
+        break;
+      case 'disconnected':
+        setExtConnected(false);
+        setExtUserName('');
+        break;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ★ مراقبة رسائل الإضافة عبر MutationObserver + postMessage
+  useEffect(() => {
+    findBridge();
+    const outbox = bridgeOutboxRef.current;
+    let observer: MutationObserver | null = null;
+    if (outbox) {
+      observer = new MutationObserver(() => {
+        if (!outbox.textContent) return;
+        try {
+          const data = JSON.parse(outbox.textContent);
+          outbox.textContent = '';
+          handleExtMessage(data);
+        } catch { outbox.textContent = ''; }
+      });
+      observer.observe(outbox, { childList: true, characterData: true, subtree: true });
+    }
+    // fallback: postMessage
+    const msgHandler = (e: MessageEvent) => {
+      if (e.data?.source === 'noor-extension') handleExtMessage(e.data);
+    };
+    window.addEventListener('message', msgHandler);
+    // Ping on mount
+    sendToExt({ source: 'school-system', action: 'ping' });
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('message', msgHandler);
+    };
+  }, [findBridge, handleExtMessage, sendToExt]);
+
+  const noorConnect = () => {
+    const sent = sendToExt({ source: 'school-system', action: 'ping' });
+    if (!sent) showError('الجسر غير موجود — تأكد أن إضافة نور مفعّلة ونور مفتوح في تبويب آخر');
+    else showSuccess('جاري فحص الاتصال...');
+  };
+
+  const noorDisconnect = () => {
+    setExtConnected(false);
+    setExtUserName('');
+    showSuccess('تم قطع الاتصال بنور');
+  };
 
   // ════════════════════════════════════════
   // جلب الإحصائيات
@@ -169,8 +283,41 @@ const NoorPage: React.FC = () => {
 
   const executeMarkAsDone = async () => {
     setConfirmOpen(false);
-    setUpdating(true);
     const selectedRecs = Array.from(selected).map(idx => records[idx]);
+
+    // ★ إذا الإضافة متصلة: أرسل للتوثيق الفعلي عبر الجسر
+    if (extConnected) {
+      const recsWithOverrides = selectedRecs.map((rec, i) => {
+        const idx = Array.from(selected)[i];
+        const override = absenceOverrides[idx];
+        return override ? { ...rec, _absenceOverride: override } : rec;
+      }).filter(rec => rec._noorValue); // فقط المطابق
+
+      if (recsWithOverrides.length === 0) {
+        showError('لم يتم تحديد سجلات مطابقة لنور');
+        return;
+      }
+
+      setExtWorking(true);
+      setExtProgress({ done: 0, total: recsWithOverrides.length, current: '' });
+
+      const sent = sendToExt({
+        source: 'school-system',
+        action: 'execute',
+        operation: activeTab,
+        records: recsWithOverrides,
+        stage: recsWithOverrides[0]?.stage || '',
+      });
+
+      if (!sent) {
+        setExtWorking(false);
+        showError('الجسر غير متصل — تأكد من فتح نور في تبويب آخر مع تفعيل الإضافة');
+      }
+      return;
+    }
+
+    // ★ بدون إضافة: تحديث حالة نور في قاعدة البيانات فقط
+    setUpdating(true);
     try {
       const updates: NoorStatusUpdate[] = selectedRecs.map(rec => ({
         id: rec.id,
@@ -181,13 +328,12 @@ const NoorPage: React.FC = () => {
       const res = await noorApi.updateStatus(updates);
       if (res.data?.data) {
         const { updated, failed } = res.data.data;
-        // Build detailed results
         const details = selectedRecs.map((rec, i) => ({
           name: rec.studentName || '',
           grade: rec.grade || '',
           className: rec.className || rec.class || '',
           type: rec.description || rec.tardinessType || rec.behaviorType || rec.excuseType || '',
-          ok: i < updated, // first N are successful
+          ok: i < updated,
         }));
         setResultDetails(details);
         showSuccess(`تم تحديث ${updated} سجل${failed > 0 ? ` (${failed} فشل)` : ''}`);
@@ -283,6 +429,83 @@ const NoorPage: React.FC = () => {
         </button>
       </div>
 
+      {/* ═══ شريط الاتصال بإضافة نور ═══ */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: '#fff', borderRadius: '16px', border: '2px solid #e5e7eb',
+        padding: '10px 16px', marginBottom: '12px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{
+            width: '12px', height: '12px', borderRadius: '50%',
+            background: extConnected ? '#22c55e' : '#ef4444',
+            display: 'inline-block',
+            boxShadow: `0 0 8px ${extConnected ? '#22c55e50' : '#ef444450'}`,
+          }} />
+          <div>
+            <span style={{ fontWeight: 700, fontSize: '13px', color: '#1f2937' }}>
+              {extConnected ? 'متصل بنور' : 'غير متصل'}
+            </span>
+            {extUserName && (
+              <span style={{ fontSize: '12px', color: '#9ca3af', marginRight: '8px' }}>({extUserName})</span>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {extConnected ? (
+            <>
+              <button onClick={() => sendToExt({ source: 'school-system', action: 'ping' })}
+                style={{ padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700, background: '#f3f4f6', color: '#374151', border: '2px solid #d1d5db', cursor: 'pointer' }}>
+                🔄 تحديث الحالة
+              </button>
+              <button onClick={noorDisconnect}
+                style={{ padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700, background: '#f3f4f6', color: '#374151', border: '2px solid #d1d5db', cursor: 'pointer' }}>
+                🔗 قطع الاتصال
+              </button>
+            </>
+          ) : (
+            <button onClick={noorConnect}
+              style={{ padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700, background: '#4f46e5', color: '#fff', border: 'none', cursor: 'pointer' }}>
+              🔗 فحص الاتصال
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ شاشة التقدم (عند التوثيق الفعلي) ═══ */}
+      {extWorking && (
+        <div style={{
+          background: '#fff', borderRadius: '20px', border: '2px solid #e5e7eb',
+          padding: '40px', textAlign: 'center', marginBottom: '16px',
+        }}>
+          <div style={{ width: '120px', height: '120px', margin: '0 auto 20px', position: 'relative' }}>
+            <svg viewBox="0 0 120 120" style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#4f46e5" strokeWidth="8" strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 52}`}
+                strokeDashoffset={`${2 * Math.PI * 52 * (1 - (extProgress.total > 0 ? extProgress.done / extProgress.total : 0))}`}
+                style={{ transition: 'stroke-dashoffset 0.5s' }} />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 900, color: '#1f2937' }}>
+              {extProgress.total > 0 ? Math.round(extProgress.done / extProgress.total * 100) : 0}%
+            </div>
+          </div>
+          <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>جاري التوثيق في نور...</h3>
+          <p style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '8px' }}>{extProgress.done} من {extProgress.total} سجل</p>
+          {extProgress.current && (
+            <p style={{ fontSize: '12px', color: '#6b7280', background: '#f8fafc', borderRadius: '12px', padding: '8px 16px', display: 'inline-block' }}>
+              {extProgress.current}
+            </p>
+          )}
+          <div style={{ marginTop: '24px' }}>
+            <button onClick={() => { setExtWorking(false); sendToExt({ source: 'school-system', action: 'cancel' }); showSuccess('تم إيقاف التوثيق'); }}
+              style={{ padding: '8px 24px', borderRadius: '12px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '14px' }}>
+              ⏹ إيقاف
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ═══ التبويبات (5 تبويبات) ═══ */}
       <div style={{
         display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '16px', padding: '4px',
@@ -343,14 +566,14 @@ const NoorPage: React.FC = () => {
             disabled={selected.size === 0 || updating}
             style={{
               padding: '8px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 700,
-              background: selected.size > 0 ? '#22c55e' : '#e5e7eb',
+              background: selected.size > 0 ? (extConnected ? '#4f46e5' : '#22c55e') : '#e5e7eb',
               color: selected.size > 0 ? '#fff' : '#9ca3af',
               border: 'none', cursor: selected.size > 0 ? 'pointer' : 'not-allowed',
               display: 'flex', alignItems: 'center', gap: '6px',
               opacity: updating ? 0.7 : 1,
             }}
           >
-            ✅ {updating ? 'جاري التحديث...' : 'تحديث كـ "تم" في نور'}
+            {extConnected ? '▶️' : '✅'} {updating ? 'جاري التحديث...' : (extConnected ? 'بدء التوثيق في نور' : 'تحديث كـ "تم" في نور')}
           </button>
         </div>
       </div>
@@ -429,7 +652,7 @@ const NoorPage: React.FC = () => {
                   {activeTab === 'compensation' && <><th>السلوك التعويضي</th><th>التاريخ</th></>}
                   {activeTab === 'excellent' && <><th>السلوك المتمايز</th><th>المعلم</th><th>التاريخ</th></>}
                   {activeTab === 'absence' && <><th>نوع الغياب</th><th>التاريخ</th></>}
-                  <th>الحالة</th>
+                  <th>نور</th>
                 </tr>
               </thead>
               <tbody>
@@ -523,7 +746,11 @@ const NoorPage: React.FC = () => {
                         )}
 
                         <td>
-                          <NoorStatusBadge status={rec.noorStatus} />
+                          {(absenceOverrides[idx] || rec._noorValue) ? (
+                            <span style={{ display: 'inline-block', padding: '2px 8px', fontSize: '12px', fontWeight: 700, borderRadius: '8px', background: '#dcfce7', color: '#15803d' }}>✓ مطابق</span>
+                          ) : (
+                            <span style={{ display: 'inline-block', padding: '2px 8px', fontSize: '12px', fontWeight: 700, borderRadius: '8px', background: '#fee2e2', color: '#dc2626' }}>✗ غير مطابق</span>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -8,8 +8,10 @@ public enum AbsenceType
 
 public enum ExcuseType
 {
-    Excused,    // بعذر
-    Unexcused   // بدون عذر
+    Excused,            // بعذر
+    Unexcused,          // بدون عذر
+    PlatformExcused,    // غياب منصة بعذر (مدرستي)
+    PlatformUnexcused   // غياب منصة بدون عذر (مدرستي)
 }
 
 public enum AbsenceStatus
