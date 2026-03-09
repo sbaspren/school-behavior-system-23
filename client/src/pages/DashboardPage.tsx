@@ -241,6 +241,7 @@ const DashboardPage: React.FC = () => {
   const [stageFilter, setStageFilter] = useState('');
   const [timelineSem, setTimelineSem] = useState(() => getSemesterProgress().semIdx);
   const [printSectionHidden, setPrintSectionHidden] = useState(false);
+  const [dismissedPrints, setDismissedPrints] = useState<Set<string>>(new Set());
 
   const enabledStages = useMemo(() =>
     stages.filter((s) => s.isEnabled && s.grades.some((g) => g.isEnabled && g.classCount > 0)),
@@ -480,22 +481,54 @@ const DashboardPage: React.FC = () => {
           )}
         </div>
 
-        {/* Absence by class */}
+        {/* Absence by class — مصفوفة صفوف × فصول مثل الأصلي */}
         <div style={cardStyle}>
-          <h3 style={cardTitleStyle}>متابعة إدخال الغياب</h3>
-          {data.absenceByClass.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 16, color: '#9da3b8', fontSize: 12 }}>لا توجد بيانات غياب اليوم</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {data.absenceByClass.map((ac, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #f8fafc' }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 100, background: '#eef2ff', color: '#6366f1' }}>{ac.className}</span>
-                  <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#475569' }}>{ac.grade}</span>
-                  <span style={{ fontSize: 14, fontWeight: 900, color: ac.count > 0 ? '#dc2626' : '#22c55e' }}>{ac.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <h3 style={{ ...cardTitleStyle, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#f97316' }}>fact_check</span> متابعة إدخال الغياب
+          </h3>
+          {(() => {
+            // بناء مصفوفة الصفوف × الفصول
+            const absData = data.absenceByClass || [];
+            if (absData.length === 0) {
+              return <div style={{ textAlign: 'center', padding: 16, color: '#9da3b8', fontSize: 12 }}>لا توجد بيانات غياب اليوم</div>;
+            }
+            // استخراج الصفوف والفصول الفريدة
+            const grades = Array.from(new Set(absData.map(a => a.grade))).sort();
+            const sections = Array.from(new Set(absData.map(a => a.className))).sort();
+            // بناء lookup
+            const lookup: Record<string, number> = {};
+            absData.forEach(a => { lookup[`${a.grade}-${a.className}`] = a.count; });
+            return (
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 3px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ fontSize: 10, fontWeight: 800, color: '#9da3b8', padding: '2px 4px', textAlign: 'right', width: 60 }}></th>
+                    {sections.map(s => <th key={s} style={{ fontSize: 11, fontWeight: 800, color: '#9da3b8', padding: '2px 4px', textAlign: 'center' }}>{s}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grades.map(g => (
+                    <tr key={g}>
+                      <td style={{ fontSize: 10, fontWeight: 700, color: '#475569', padding: '3px 4px' }}>{g}</td>
+                      {sections.map(s => {
+                        const count = lookup[`${g}-${s}`];
+                        const hasData = count !== undefined;
+                        const bg = !hasData ? '#f8fafc' : count === 0 ? '#f0fdf4' : '#fef2f2';
+                        const clr = !hasData ? '#d1d5db' : count === 0 ? '#22c55e' : '#dc2626';
+                        return (
+                          <td key={s} style={{ textAlign: 'center', padding: '4px 2px' }}>
+                            <div style={{ background: bg, borderRadius: 6, padding: '3px 0', fontSize: 12, fontWeight: 800, color: clr }}>
+                              {hasData ? count : '—'}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
           {/* Attendance percentage */}
           {(() => {
             const totalStudents = data.students?.total || 0;
@@ -547,28 +580,30 @@ const DashboardPage: React.FC = () => {
         </div>
 
         {/* Needs printing */}
-        {data.needsPrinting.length > 0 && (
+        {data.needsPrinting.filter(x => !dismissedPrints.has(`${x.studentId}_${x.type}`)).length > 0 && (
           <div style={cardStyle}>
             <h3 style={{ ...cardTitleStyle, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => setPrintSectionHidden(h => !h)}>
               <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#ef4444' }}>print</span>
               يحتاج توثيق
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'white', background: '#ef4444', padding: '1px 8px', borderRadius: 100 }}>{data.needsPrinting.length}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'white', background: '#ef4444', padding: '1px 8px', borderRadius: 100 }}>
+                {data.needsPrinting.filter(x => !dismissedPrints.has(`${x.studentId}_${x.type}`)).length}
+              </span>
               <span style={{ marginRight: 'auto', fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>{printSectionHidden ? '▼ إظهار' : '▲ إخفاء'}</span>
             </h3>
             {!printSectionHidden && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: 220, overflowY: 'auto' }}>
                 {/* Violations */}
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', marginBottom: 6 }}>مخالفات بدون نماذج</div>
-                  {data.needsPrinting.filter(x => x.type === 'مخالفة').map((it, i) => (
-                    <PrintItem key={i} item={it} />
+                  {data.needsPrinting.filter(x => x.type === 'مخالفة' && !dismissedPrints.has(`${x.studentId}_${x.type}`)).map((it, i) => (
+                    <PrintItem key={i} item={it} onDismiss={() => setDismissedPrints(prev => new Set([...prev, `${it.studentId}_${it.type}`]))} />
                   ))}
                 </div>
                 {/* Absences */}
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#ea580c', marginBottom: 6 }}>غياب متكرر</div>
-                  {data.needsPrinting.filter(x => x.type === 'غياب').map((it, i) => (
-                    <PrintItem key={i} item={it} />
+                  {data.needsPrinting.filter(x => x.type === 'غياب' && !dismissedPrints.has(`${x.studentId}_${x.type}`)).map((it, i) => (
+                    <PrintItem key={i} item={it} onDismiss={() => setDismissedPrints(prev => new Set([...prev, `${it.studentId}_${it.type}`]))} />
                   ))}
                 </div>
               </div>
@@ -797,7 +832,7 @@ const CalendarCard: React.FC = () => {
   );
 };
 
-const PrintItem: React.FC<{ item: NeedsPrintItem }> = ({ item }) => {
+const PrintItem: React.FC<{ item: NeedsPrintItem; onDismiss?: () => void }> = ({ item, onDismiss }) => {
   const [expanded, setExpanded] = React.useState(false);
   const isViol = item.type === 'مخالفة';
   const degBg = isViol ? (item.degree >= 4 ? '#dc2626' : item.degree >= 3 ? '#f97316' : '#f59e0b') : '#ea580c';
@@ -823,6 +858,14 @@ const PrintItem: React.FC<{ item: NeedsPrintItem }> = ({ item }) => {
                 <span key={i} style={{ background: '#eef2ff', color: '#4f46e5', padding: '1px 6px', borderRadius: 100, fontSize: 9, fontWeight: 700 }}>{f}</span>
               ))}
             </div>
+          )}
+          {onDismiss && (
+            <button onClick={(e) => { e.stopPropagation(); onDismiss(); }} style={{
+              display: 'flex', alignItems: 'center', gap: 3, padding: '3px 10px', marginTop: 4,
+              background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer'
+            }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 13 }}>visibility_off</span> تجاهل
+            </button>
           )}
         </div>
       )}
