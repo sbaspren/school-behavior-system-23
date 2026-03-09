@@ -74,7 +74,10 @@ const SettingsPage: React.FC = () => {
           <span style={{ fontSize: '24px' }}>⚙️</span>
         </div>
         <div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>إعدادات النظام</h2>
+          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 24 }}>settings</span>
+            إعدادات النظام
+          </h2>
           <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>إدارة بيانات المدرسة والمستخدمين والطلاب</p>
         </div>
       </div>

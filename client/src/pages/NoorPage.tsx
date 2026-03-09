@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 import { noorApi, NoorStatusUpdate } from '../api/noor';
 import { showSuccess, showError } from '../components/shared/Toast';
 
@@ -383,32 +387,20 @@ const NoorPage: React.FC = () => {
 
   return (
     <div>
-      {/* ═══ بانر البطل + إحصائيات ═══ */}
-      <div style={{
-        background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-        borderRadius: '20px', padding: '24px', marginBottom: '16px', color: '#fff',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '28px' }}>☁️</span> التوثيق في نور
-            </h1>
-            <p style={{ margin: '6px 0 0', fontSize: '14px', color: '#94a3b8' }}>
-              إدارة المخالفات والتأخر والسلوك الإيجابي والغياب — ربط مباشر مع نظام نور
-            </p>
-          </div>
-        </div>
-
-        {/* إحصائيات */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '12px', marginTop: '20px' }}>
-          <StatBadge icon="⚖️" label="مخالفات" value={stats?.violations ?? '-'} color="#ef4444" />
-          <StatBadge icon="⏱️" label="تأخر" value={stats?.tardiness ?? '-'} color="#f59e0b" />
-          <StatBadge icon="🔄" label="تعويضية" value={stats?.compensation ?? '-'} color="#3b82f6" />
-          <StatBadge icon="🌟" label="متمايز" value={stats?.excellent ?? '-'} color="#22c55e" />
-          <StatBadge icon="📅" label="غياب" value={stats?.absence ?? '-'} color="#f97316" />
-          <StatBadge icon="✅" label="موثق اليوم" value={stats?.documentedToday ?? '-'} color="#10b981" />
-        </div>
-      </div>
+      {/* Hero Banner — مطابق لـ .page-hero: gradient أخضر غامق نور */}
+      <PageHero
+        title="التوثيق في نور"
+        subtitle="إدارة المخالفات والتأخر والسلوك الإيجابي والغياب — ربط مباشر مع نظام نور"
+        gradient="linear-gradient(135deg, #00695c, #00897b)"
+        stats={[
+          { icon: 'gavel', label: 'مخالفات', value: stats?.violations ?? '-', color: '#ef4444' },
+          { icon: 'timer_off', label: 'تأخر', value: stats?.tardiness ?? '-', color: '#f59e0b' },
+          { icon: 'autorenew', label: 'تعويضية', value: stats?.compensation ?? '-', color: '#60a5fa' },
+          { icon: 'stars', label: 'متمايز', value: stats?.excellent ?? '-', color: '#86efac' },
+          { icon: 'event_busy', label: 'غياب', value: stats?.absence ?? '-', color: '#f97316' },
+          { icon: 'check_circle', label: 'موثق اليوم', value: stats?.documentedToday ?? '-', color: '#10b981' },
+        ]}
+      />
 
       {/* ═══ فلتر العرض: اليوم / كل غير الموثق ═══ */}
       <div style={{

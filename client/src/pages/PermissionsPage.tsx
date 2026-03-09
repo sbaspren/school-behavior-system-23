@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import ActionBar from '../components/shared/ActionBar';
+import FloatingBar from '../components/shared/FloatingBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 import { permissionsApi, PermissionData } from '../api/permissions';
 import { studentsApi } from '../api/students';
 import { settingsApi, StageConfigData } from '../api/settings';
@@ -63,61 +69,41 @@ const PermissionsPage: React.FC = () => {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', background: '#f5f3ff', borderRadius: '8px', border: '1px solid #ddd6fe' }}>
-            <span style={{ fontSize: '24px' }}>🚪</span>
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>الاستئذان</h2>
-            <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>تسجيل ومتابعة حالات الاستئذان</p>
-          </div>
-        </div>
-        <button onClick={() => setModalOpen(true)} style={{
-          padding: '10px 20px', background: '#7c3aed', color: '#fff',
-          borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
-          boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
-        }}>➕ تسجيل استئذان</button>
-      </div>
+      {/* Hero Banner — مطابق لـ .page-hero: gradient سماوي + عدادات */}
+      <PageHero
+        title="الاستئذان"
+        subtitle="تسجيل ومتابعة حالات الاستئذان"
+        gradient="linear-gradient(135deg, #0891b2, #06b6d4)"
+        stats={[
+          { icon: 'exit_to_app', label: 'استئذان اليوم', value: todayRecords.length, color: '#fbbf24' },
+          { icon: 'bar_chart', label: 'إجمالي الاستئذان', value: filteredByStage.length, color: '#c084fc' },
+          { icon: 'check_circle', label: 'تم التأكيد', value: filteredByStage.filter((r) => r.confirmationTime).length, color: '#86efac' },
+        ]}
+      />
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard label="إجمالي الاستئذان" value={filteredByStage.length} color="#7c3aed" />
-        <StatCard label="استئذان اليوم" value={todayRecords.length} color="#0891b2" />
-        <StatCard label="تم التأكيد" value={filteredByStage.filter((r) => r.confirmationTime).length} color="#15803d" />
-        <StatCard label="تم الإرسال" value={filteredByStage.filter((r) => r.isSent).length} color="#2563eb" />
-        <StatCard label="بانتظار التأكيد" value={filteredByStage.filter((r) => !r.confirmationTime).length} color="#ea580c" />
-      </div>
+      {/* Tabs — مطابق لـ .tabs-bar: 3 tabs بلون سماوي */}
+      <TabBar
+        tabs={[
+          { id: 'today', label: 'اليومي', icon: 'today' },
+          { id: 'approved', label: 'المعتمد', icon: 'verified' },
+          { id: 'reports', label: 'التقارير', icon: 'bar_chart' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as TabType)}
+        sectionColor="#0891b2"
+      />
 
       {/* Stage Filter */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '14px', fontWeight: 700, color: '#6b7280' }}>المرحلة:</span>
         <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '4px' }}>
-          <FilterBtn label="الكل" count={records.length} active={stageFilter === '__all__'} onClick={() => setStageFilter('__all__')} color="#7c3aed" />
+          <FilterBtn label="الكل" count={records.length} active={stageFilter === '__all__'} onClick={() => setStageFilter('__all__')} color="#0891b2" />
           {enabledStages.map((stage) => {
             const info = SETTINGS_STAGES.find((s) => s.id === stage.stage);
             const count = records.filter((r) => r.stage === stage.stage).length;
-            return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} color="#7c3aed" />;
+            return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} color="#0891b2" />;
           })}
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '10px', padding: '4px', marginBottom: '16px' }}>
-        {([
-          { id: 'today' as TabType, label: 'اليوم', icon: '📅' },
-          { id: 'approved' as TabType, label: 'السجل التراكمي', icon: '📋' },
-          { id: 'reports' as TabType, label: 'التقارير', icon: '📊' },
-        ]).map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            flex: 1, padding: '10px 16px', borderRadius: '8px',
-            background: activeTab === tab.id ? '#fff' : 'transparent',
-            color: activeTab === tab.id ? '#7c3aed' : '#6b7280',
-            fontWeight: 700, fontSize: '14px', border: 'none', cursor: 'pointer',
-            boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-          }}>{tab.icon} {tab.label}</button>
-        ))}
       </div>
 
       {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} schoolSettings={schoolSettings} />}

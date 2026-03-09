@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import FloatingBar from '../components/shared/FloatingBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 import { tardinessApi } from '../api/tardiness';
 import { permissionsApi } from '../api/permissions';
 import { studentsApi } from '../api/students';
@@ -105,30 +110,16 @@ const AttendancePage: React.FC = () => {
   return (
     <div>
       {/* ═══ Header — مطابق لسطر 56-68 ═══ */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', background: '#fef2f2', borderRadius: '10px', border: '1px solid #fecaca' }}>
-            <span style={{ fontSize: '24px' }}>⏰</span>
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>التأخر والاستئذان</h2>
-            <p style={{ margin: 0, fontSize: '14px', color: '#999' }}>
-              المرحلة: <span style={{ color: '#dc2626', fontWeight: 700 }}>{stageFilter === '__all__' ? 'جميع المراحل' : stageFilter}</span>
-            </p>
-          </div>
-        </div>
-        {/* Stats — مطابق لسطر 66-67 */}
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '8px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#dc2626' }}>{todayLate.length}</div>
-            <div style={{ fontSize: '12px', color: '#ef4444' }}>متأخر</div>
-          </div>
-          <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '12px', padding: '8px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#7c3aed' }}>{todayPerm.length}</div>
-            <div style={{ fontSize: '12px', color: '#8b5cf6' }}>مستأذن</div>
-          </div>
-        </div>
-      </div>
+      {/* Hero Banner — الحضور اليومي */}
+      <PageHero
+        title="التأخر والاستئذان"
+        subtitle={stageFilter === '__all__' ? 'جميع المراحل' : stageFilter}
+        gradient="linear-gradient(135deg, #dc2626, #7c3aed)"
+        stats={[
+          { icon: 'timer_off', label: 'متأخر', value: todayLate.length, color: '#fbbf24' },
+          { icon: 'exit_to_app', label: 'مستأذن', value: todayPerm.length, color: '#c084fc' },
+        ]}
+      />
 
       {/* ═══ Stage filter ═══ */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -142,32 +133,17 @@ const AttendancePage: React.FC = () => {
         </div>
       </div>
 
-      {/* ═══ Tabs — مطابق لسطر 71-88 ═══ */}
-      <div style={{ background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
-          {([
-            { id: 'late' as MainTab, label: 'تأخر اليوم', icon: '⏰', count: todayLate.length, color: '#dc2626', bg: '#fef2f2' },
-            { id: 'permission' as MainTab, label: 'استئذان اليوم', icon: '🚪', count: todayPerm.length, color: '#7c3aed', bg: '#f5f3ff' },
-            { id: 'archive' as MainTab, label: 'الأرشيف', icon: '📦', color: '#6b7280', bg: '#f9fafb' },
-          ] as const).map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-              flex: 1, padding: '14px 20px', textAlign: 'center', fontWeight: 700, fontSize: '14px',
-              border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-              borderBottom: activeTab === tab.id ? `3px solid ${tab.color}` : '3px solid transparent',
-              color: activeTab === tab.id ? tab.color : '#6b7280',
-              background: activeTab === tab.id ? tab.bg : 'transparent',
-            }}>
-              {tab.icon} {tab.label}
-              {'count' in tab && tab.count !== undefined && (
-                <span style={{
-                  marginRight: '8px', padding: '2px 10px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700,
-                  background: activeTab === tab.id ? tab.color : '#9ca3af', color: '#fff',
-                }}>{tab.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Tabs — مطابق لـ .tabs-bar */}
+      <TabBar
+        tabs={[
+          { id: 'late', label: 'تأخر اليوم', icon: 'timer_off' },
+          { id: 'permission', label: 'استئذان اليوم', icon: 'exit_to_app' },
+          { id: 'archive', label: 'الأرشيف', icon: 'inventory_2' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as MainTab)}
+        sectionColor={tc.main}
+      />
 
       {/* ═══ Tab content ═══ */}
       {activeTab === 'late' && (

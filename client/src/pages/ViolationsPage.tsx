@@ -6,6 +6,12 @@ import { settingsApi, StageConfigData } from '../api/settings';
 import { whatsappApi } from '../api/whatsapp';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES } from '../utils/constants';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import ActionBar from '../components/shared/ActionBar';
+import FloatingBar from '../components/shared/FloatingBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 
 const DEGREE_LABELS: Record<number, { label: string; color: string; bg: string }> = {
   1: { label: 'الأولى', color: '#15803d', bg: '#dcfce7' },
@@ -117,6 +123,16 @@ const ViolationsPage: React.FC = () => {
     [filteredByStage, todayDate]
   );
 
+  const hijriDate = useMemo(() => {
+    try { return new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch { return ''; }
+  }, []);
+  const criticalCount = useMemo(() => filteredByStage.filter(v => v.degree >= 4).length, [filteredByStage]);
+  const stageName = useMemo(() => {
+    if (stageFilter === '__all__') return '';
+    const info = SETTINGS_STAGES.find(s => s.name === stageFilter);
+    return info?.name || stageFilter;
+  }, [stageFilter]);
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '60px' }}>
@@ -128,35 +144,31 @@ const ViolationsPage: React.FC = () => {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
-            <span style={{ fontSize: '24px' }}>⚠️</span>
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>المخالفات السلوكية</h2>
-            <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>تسجيل ومتابعة المخالفات والإجراءات</p>
-          </div>
-        </div>
-        <button onClick={() => setModalOpen(true)} style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '10px 20px', background: '#dc2626', color: '#fff',
-          borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
-          boxShadow: '0 4px 14px rgba(220,38,38,0.3)',
-        }}>
-          ➕ تسجيل مخالفة
-        </button>
-      </div>
+      {/* Hero Banner — مطابق لـ .page-hero في الأصلي: gradient indigo + 3 عدادات */}
+      <PageHero
+        title={`المخالفات السلوكية${stageName ? ' — ' + stageName : ''}`}
+        subtitle={hijriDate}
+        gradient="linear-gradient(135deg, #4f46e5, #6366f1)"
+        stats={[
+          { icon: 'gavel', label: 'مخالفات اليوم', value: todayViolations.length, color: '#ef4444' },
+          { icon: 'bar_chart', label: 'إجمالي المخالفات', value: filteredByStage.length, color: '#8b5cf6' },
+          { icon: 'warning', label: 'درجة ٤-٥', value: criticalCount, color: '#f59e0b' },
+        ]}
+      />
 
-      {/* Hero Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard label="إجمالي المخالفات" value={filteredByStage.length} color="#4f46e5" />
-        <StatCard label="إجمالي الحسم" value={filteredByStage.reduce((s, v) => s + v.deduction, 0)} color="#dc2626" />
-        <StatCard label="مخالفات اليوم" value={todayViolations.length} color="#0891b2" />
-        <StatCard label="تم الإرسال" value={filteredByStage.filter((v) => v.isSent).length} color="#15803d" />
-        <StatCard label="لم يُرسل" value={filteredByStage.filter((v) => !v.isSent).length} color="#ea580c" />
-      </div>
+      {/* Tabs — مطابق لـ .tabs-bar: 5 tabs مع Material Symbols بلون indigo */}
+      <TabBar
+        tabs={[
+          { id: 'today', label: 'اليومي', icon: 'today' },
+          { id: 'approved', label: 'المعتمد', icon: 'verified' },
+          { id: 'positive', label: 'السلوك المتمايز', icon: 'stars' },
+          { id: 'compensation', label: 'درجات التعويض', icon: 'autorenew' },
+          { id: 'reports', label: 'التقارير', icon: 'bar_chart' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as TabType)}
+        sectionColor="#4f46e5"
+      />
 
       {/* Stage Filter */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -169,27 +181,6 @@ const ViolationsPage: React.FC = () => {
             return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} />;
           })}
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '10px', padding: '4px', marginBottom: '16px' }}>
-        {[
-          { id: 'today' as TabType, label: 'اليوم', icon: '📅' },
-          { id: 'approved' as TabType, label: 'السجل التراكمي', icon: '📋' },
-          { id: 'positive' as TabType, label: 'السلوك المتمايز', icon: '⭐' },
-          { id: 'compensation' as TabType, label: 'درجات التعويض', icon: '🏆' },
-          { id: 'reports' as TabType, label: 'التقارير', icon: '📊' },
-        ].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            flex: 1, padding: '10px 16px', borderRadius: '8px',
-            background: activeTab === tab.id ? '#fff' : 'transparent',
-            color: activeTab === tab.id ? '#dc2626' : '#6b7280',
-            fontWeight: 700, fontSize: '14px', border: 'none', cursor: 'pointer',
-            boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-          }}>
-            {tab.icon} {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* Tab Content */}
@@ -423,6 +414,19 @@ const TodayTab: React.FC<{
 
   return (
     <>
+      {/* Action Bar — مطابق لـ .action-bar + .btn-hero */}
+      <ActionBar
+        sectionColor="#4f46e5"
+        leftButtons={[
+          { icon: 'add_circle', label: 'تسجيل مخالفة', variant: 'primary', onClick: () => {/* parent handles modal */} },
+          { icon: 'refresh', label: 'تحديث', variant: 'outline', onClick: onRefresh },
+        ]}
+        rightButtons={[
+          { icon: 'send', label: 'إرسال للجميع', variant: 'success', onClick: handleSendBulk, disabled: filtered.filter(v => !v.isSent).length === 0 },
+          { icon: 'print', label: 'طباعة', variant: 'outline', onClick: handlePrintToday },
+        ]}
+      />
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
@@ -435,37 +439,28 @@ const TodayTab: React.FC<{
             <option key={d} value={d}>الدرجة {DEGREE_LABELS[d].label}</option>
           ))}
         </select>
-        <button onClick={handlePrintToday} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
-          🖨️ طباعة
-        </button>
-        <button onClick={handleExport} style={{ height: '38px', padding: '0 16px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
-          📥 تصدير CSV
-        </button>
       </div>
 
-      {/* Bulk Action Bar */}
-      {selected.size > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#eff6ff', borderRadius: '10px', marginBottom: '12px', border: '1px solid #bfdbfe' }}>
-          <span style={{ fontWeight: 700, color: '#1e40af' }}>تم تحديد {selected.size} مخالفة</span>
-          <div style={{ flex: 1 }} />
-          <button onClick={handleSendBulk} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
-            📱 إرسال واتساب
-          </button>
-          <button onClick={handleDeleteBulk} style={{ padding: '6px 16px', background: '#dc2626', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
-            🗑️ حذف المحدد
-          </button>
-          <button onClick={() => setSelected(new Set())} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#374151', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>
-            إلغاء التحديد
-          </button>
-        </div>
-      )}
+      {/* Floating Selection Bar — مطابق للأصلي: fixed bottom */}
+      <FloatingBar
+        count={selected.size}
+        actions={[
+          { icon: 'send', label: 'إرسال واتساب', color: '#25d366', onClick: handleSendBulk },
+          { icon: 'delete', label: 'حذف المحدد', color: '#dc2626', onClick: handleDeleteBulk },
+        ]}
+        onCancel={() => setSelected(new Set())}
+      />
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 20px', color: '#9ca3af' }}>
-          <p style={{ fontSize: '48px' }}>⚠️</p>
-          <p style={{ fontSize: '18px', fontWeight: 500 }}>لا توجد مخالفات لهذا اليوم</p>
-        </div>
+        <EmptyState
+          icon="verified_user"
+          title="لا توجد مخالفات لهذا اليوم"
+          description="لم يتم تسجيل أي مخالفة سلوكية اليوم"
+          actionLabel="تسجيل مخالفة"
+          actionIcon="add_circle"
+          sectionColor="#4f46e5"
+        />
       ) : (
         <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
           <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
@@ -522,20 +517,18 @@ const TodayTab: React.FC<{
                       <td style={{ textAlign: 'center' }}>
                         {(() => {
                           const reqForms = getRequiredForms(v.procedures);
-                          const hl = (formId: FormId) => reqForms.has(formId) ? { background: '#fef3c7', borderRadius: '6px', boxShadow: '0 0 0 2px #f59e0b' } : {};
+                          const hl = (formId: FormId) => reqForms.has(formId);
                           return (
-                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                              <ActionBtn icon="📱" title="إرسال واتساب" color="#25d366" onClick={() => handleSendWhatsApp(v)} disabled={sendingId === v.id} />
-                              <ActionBtn icon="✏️" title="تعديل الرسالة" color="#3b82f6" onClick={() => openMessageEditor(v)} />
-                              <span style={hl('tahood_slooki')}><ActionBtn icon="📄" title="تعهد سلوكي" color="#6366f1" onClick={() => handlePrint(v, 'تعهد')} /></span>
-                              <span style={hl('ishar_wali_amr')}><ActionBtn icon="📢" title="إشعار ولي أمر" color="#3b82f6" onClick={() => handlePrint(v, 'إشعار')} /></span>
-                              <span style={hl('dawat_wali_amr')}><ActionBtn icon="📨" title="دعوة ولي أمر" color="#d97706" onClick={() => setDawatModal(v)} /></span>
-                              <span style={hl('mahdar_lajnah')}><ActionBtn icon="👥" title="محضر لجنة" color="#dc2626" onClick={() => handlePrint(v, 'محضر')} /></span>
-                              <span style={hl('ehalat_talib')}><ActionBtn icon="📤" title="إحالة طالب" color="#7c3aed" onClick={() => handlePrint(v, 'إحالة')} /></span>
-                              <span style={hl('mahdar_dab_wakea')}><ActionBtn icon="📝" title="ضبط واقعة" color="#6b7280" onClick={() => handlePrint(v, 'ضبط واقعة')} /></span>
-                              <span style={hl('tawid_darajat')}><ActionBtn icon="🏆" title="فرص تعويض" color="#0d9488" onClick={() => handlePrint(v, 'تعويض')} /></span>
-                              <ActionBtn icon="📞" title="توثيق تواصل" color="#15803d" onClick={() => handlePrint(v, 'توثيق تواصل')} />
-                              <ActionBtn icon="🗑️" title="حذف" color="#dc2626" onClick={() => setConfirmDelete(v)} />
+                            <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <ActionIcon icon="smartphone" title="إرسال واتساب" color="#25d366" hoverBg="#dcfce7" onClick={() => handleSendWhatsApp(v)} disabled={sendingId === v.id} />
+                              <ActionIcon icon="edit_note" title="تعديل الرسالة" color="#3b82f6" hoverBg="#eff6ff" onClick={() => openMessageEditor(v)} />
+                              <ActionIcon icon="verified" title="تعهد سلوكي" color="#6366f1" hoverBg="#eef2ff" onClick={() => handlePrint(v, 'تعهد')} highlight={hl('tahood_slooki')} />
+                              <ActionIcon icon="campaign" title="إشعار ولي أمر" color="#3b82f6" hoverBg="#eff6ff" onClick={() => handlePrint(v, 'إشعار')} highlight={hl('ishar_wali_amr')} />
+                              <ActionIcon icon="mail" title="دعوة ولي أمر" color="#d97706" hoverBg="#fffbeb" onClick={() => setDawatModal(v)} highlight={hl('dawat_wali_amr')} />
+                              <ActionIcon icon="groups" title="محضر لجنة" color="#dc2626" hoverBg="#fef2f2" onClick={() => handlePrint(v, 'محضر')} highlight={hl('mahdar_lajnah')} />
+                              <ActionIcon icon="forward_to_inbox" title="إحالة طالب" color="#7c3aed" hoverBg="#faf5ff" onClick={() => handlePrint(v, 'إحالة')} highlight={hl('ehalat_talib')} />
+                              <ActionIcon icon="contact_phone" title="توثيق تواصل" color="#15803d" hoverBg="#f0fdf4" onClick={() => handlePrint(v, 'توثيق تواصل')} />
+                              <ActionIcon icon="delete" title="حذف" color="#dc2626" hoverBg="#fef2f2" onClick={() => setConfirmDelete(v)} />
                             </div>
                           );
                         })()}

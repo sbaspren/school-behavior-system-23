@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import ActionBar from '../components/shared/ActionBar';
+import FloatingBar from '../components/shared/FloatingBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 import { absenceApi, AbsenceData } from '../api/absence';
 import { parentExcuseApi, ParentExcuseRow } from '../api/parentExcuse';
 import { studentsApi } from '../api/students';
@@ -91,32 +97,31 @@ const AbsencePage: React.FC = () => {
 
   return (
     <div>
-      {/* Hero Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 10, background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca' }}>
-            <span style={{ fontSize: 24 }}>📋</span>
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111' }}>الغياب {currentStageId ? `— ${stageFilter}` : ''}</h2>
-            <p style={{ margin: 0, fontSize: 14, color: '#666' }}>{getTodayDates().dayName} - {getTodayDates().hijri}</p>
-          </div>
-        </div>
-        <button onClick={() => setModalOpen(true)} style={{
-          padding: '10px 20px', background: '#ea580c', color: '#fff',
-          borderRadius: 10, fontWeight: 700, border: 'none', cursor: 'pointer',
-          boxShadow: '0 4px 14px rgba(234,88,12,0.3)',
-        }}>+ تسجيل غياب</button>
-      </div>
+      {/* Hero Banner — مطابق لـ .page-hero: gradient برتقالي + 4 عدادات */}
+      <PageHero
+        title={`الغياب${currentStageId ? ' — ' + stageFilter : ''}`}
+        subtitle={`${getTodayDates().dayName} - ${getTodayDates().hijri}`}
+        gradient="linear-gradient(135deg, #ea580c, #f97316)"
+        stats={[
+          { icon: 'event_busy', label: 'غياب اليوم', value: todayRecords.length, color: '#fbbf24' },
+          { icon: 'pending', label: 'أعذار معلقة', value: pendingExcuses, color: '#c084fc' },
+          { icon: 'shield', label: 'حماية (10+)', value: cumulativeRecords.filter(r => r.unexcusedDays >= 10).length, color: '#f87171' },
+          { icon: 'check_circle', label: 'تم الإرسال', value: filteredByStage.filter(r => r.isSent).length, color: '#86efac' },
+        ]}
+      />
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 16 }}>
-        <StatCard label="غياب اليوم" value={todayRecords.length} color="#ea580c" icon="📅" />
-        <StatCard label="أعذار معلقة" value={pendingExcuses} color="#8b5cf6" icon="📝" />
-        <StatCard label="حماية (10+)" value={cumulativeRecords.filter(r => r.unexcusedDays >= 10).length} color="#ef4444" icon="🛡️" />
-        <StatCard label="بدون عذر" value={filteredByStage.filter(r => r.excuseType === 'Unexcused').length} color="#dc2626" icon="❌" />
-        <StatCard label="تم الإرسال" value={filteredByStage.filter(r => r.isSent).length} color="#15803d" icon="✅" />
-      </div>
+      {/* Tabs — مطابق لـ .tabs-bar: 4 tabs مع Material Symbols بلون برتقالي */}
+      <TabBar
+        tabs={[
+          { id: 'today', label: 'الغياب اليومي', icon: 'today' },
+          { id: 'approved', label: 'المعتمد', icon: 'verified' },
+          { id: 'excuses', label: 'الأعذار', icon: 'assignment_late', badge: pendingExcuses },
+          { id: 'reports', label: 'التقارير', icon: 'bar_chart' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as TabType)}
+        sectionColor="#ea580c"
+      />
 
       {/* Stage Filter */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -129,28 +134,6 @@ const AbsencePage: React.FC = () => {
             return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} color="#ea580c" />;
           })}
         </div>
-      </div>
-
-      {/* Tabs — 4 tabs matching original */}
-      <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', borderRadius: 10, padding: 4, marginBottom: 16 }}>
-        {([
-          { id: 'today' as TabType, label: 'الغياب اليومي', icon: '📅' },
-          { id: 'approved' as TabType, label: 'المعتمد', icon: '✅' },
-          { id: 'excuses' as TabType, label: 'الأعذار', icon: '📝', badge: pendingExcuses },
-          { id: 'reports' as TabType, label: 'التقارير', icon: '📊' },
-        ]).map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            flex: 1, padding: '10px 16px', borderRadius: 8,
-            background: activeTab === tab.id ? '#fff' : 'transparent',
-            color: activeTab === tab.id ? '#ea580c' : '#6b7280',
-            fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer',
-            boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            position: 'relative',
-          }}>
-            {tab.icon} {tab.label}
-            {tab.badge ? <span style={{ position: 'absolute', top: 4, left: 4, background: '#ef4444', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tab.badge}</span> : null}
-          </button>
-        ))}
       </div>
 
       {activeTab === 'today' && <TodayTab records={todayRecords} allRecords={filteredByStage} onRefresh={loadData} stageFilter={stageFilter} settings={schoolSettings} />}

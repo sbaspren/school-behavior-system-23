@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import ActionBar from '../components/shared/ActionBar';
+import FloatingBar from '../components/shared/FloatingBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 import { educationalNotesApi } from '../api/educationalNotes';
 import { studentsApi } from '../api/students';
 import { settingsApi, StageConfigData } from '../api/settings';
@@ -102,53 +108,44 @@ const EducationalNotesPage: React.FC = () => {
 
   return (
     <div>
-      {/* Hero Header */}
-      <div style={{ background: 'linear-gradient(135deg, #059669 0%, #047857 100%)', borderRadius: '16px', padding: '24px 32px', marginBottom: '24px', color: '#fff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800, margin: 0 }}>الملاحظات التربوية — {stageName(currentStage)}</h1>
-            <p style={{ margin: '4px 0 0', opacity: 0.8, fontSize: '14px' }}>
-              {new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '24px' }}>
-            <HeroStat label="ملاحظات اليوم" value={stats.todayCount} />
-            <HeroStat label="إجمالي الملاحظات" value={stats.totalCount} />
-            <HeroStat label="لم تُرسل" value={stats.unsentCount} />
-          </div>
-        </div>
-        {/* Stage selector */}
-        {enabledStages.length > 1 && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            {enabledStages.map(s => (
-              <button key={s.stage} onClick={() => setCurrentStage(s.stage)}
-                style={{
-                  padding: '6px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-                  background: currentStage === s.stage ? '#fff' : 'rgba(255,255,255,0.15)',
-                  color: currentStage === s.stage ? THEME : '#fff',
-                  border: 'none',
-                }}>{stageName(s.stage)}</button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Hero Banner — مطابق لـ .page-hero: gradient أخضر + عدادات */}
+      <PageHero
+        title={`الملاحظات التربوية — ${stageName(currentStage)}`}
+        subtitle={new Date().toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        gradient="linear-gradient(135deg, #059669, #10b981)"
+        stats={[
+          { icon: 'menu_book', label: 'ملاحظات اليوم', value: stats.todayCount, color: '#fbbf24' },
+          { icon: 'bar_chart', label: 'إجمالي الملاحظات', value: stats.totalCount, color: '#c084fc' },
+          { icon: 'sms_failed', label: 'لم تُرسل', value: stats.unsentCount, color: '#f87171' },
+        ]}
+      />
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0', marginBottom: '24px', borderBottom: '2px solid #e5e7eb' }}>
-        {[
-          { id: 'today' as const, label: 'اليومي' },
-          { id: 'approved' as const, label: 'المعتمد' },
-          { id: 'reports' as const, label: 'التقارير' },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '12px 24px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
-              background: 'none', border: 'none',
-              borderBottom: activeTab === tab.id ? `3px solid ${THEME}` : '3px solid transparent',
-              color: activeTab === tab.id ? THEME : '#6b7280',
-            }}>{tab.label}</button>
-        ))}
-      </div>
+      {/* Stage selector */}
+      {enabledStages.length > 1 && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+          {enabledStages.map(s => (
+            <button key={s.stage} onClick={() => setCurrentStage(s.stage)}
+              style={{
+                padding: '6px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                background: currentStage === s.stage ? THEME : '#f3f4f6',
+                color: currentStage === s.stage ? '#fff' : '#6b7280',
+                border: 'none',
+              }}>{stageName(s.stage)}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Tabs — مطابق لـ .tabs-bar: 3 tabs بلون أخضر */}
+      <TabBar
+        tabs={[
+          { id: 'today', label: 'اليومي', icon: 'today' },
+          { id: 'approved', label: 'المعتمد', icon: 'verified' },
+          { id: 'reports', label: 'التقارير', icon: 'bar_chart' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as 'today' | 'approved' | 'reports')}
+        sectionColor={THEME}
+      />
 
       {activeTab === 'today' && <TodayTab stage={currentStage} noteTypes={noteTypes} onRefresh={refreshStats} schoolSettings={schoolSettings} />}
       {activeTab === 'approved' && <ApprovedTab stage={currentStage} noteTypes={noteTypes} schoolSettings={schoolSettings} />}

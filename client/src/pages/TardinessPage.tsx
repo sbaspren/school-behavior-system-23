@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import PageHero from '../components/shared/PageHero';
+import TabBar from '../components/shared/TabBar';
+import ActionBar from '../components/shared/ActionBar';
+import FloatingBar from '../components/shared/FloatingBar';
+import EmptyState from '../components/shared/EmptyState';
+import ActionIcon from '../components/shared/ActionIcon';
 import { tardinessApi, TardinessData } from '../api/tardiness';
 import { studentsApi } from '../api/students';
 import { settingsApi, StageConfigData } from '../api/settings';
@@ -98,66 +104,41 @@ const TardinessPage: React.FC = () => {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ padding: '10px', background: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
-            <span style={{ fontSize: '24px' }}>⏰</span>
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#111' }}>التأخر</h2>
-            <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>تسجيل ومتابعة حالات التأخر</p>
-          </div>
-        </div>
-        <button onClick={() => setModalOpen(true)} style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '10px 20px', background: '#ea580c', color: '#fff',
-          borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer',
-          boxShadow: '0 4px 14px rgba(234,88,12,0.3)',
-        }}>
-          ➕ تسجيل تأخر
-        </button>
-      </div>
+      {/* Hero Banner — مطابق لـ .page-hero: gradient أحمر + عدادات */}
+      <PageHero
+        title="التأخر"
+        subtitle="تسجيل ومتابعة حالات التأخر"
+        gradient="linear-gradient(135deg, #dc2626, #ef4444)"
+        stats={[
+          { icon: 'timer_off', label: 'تأخر اليوم', value: todayRecords.length, color: '#fbbf24' },
+          { icon: 'bar_chart', label: 'إجمالي التأخر', value: filteredByStage.length, color: '#c084fc' },
+          { icon: 'check_circle', label: 'تم الإرسال', value: filteredByStage.filter((r) => r.isSent).length, color: '#86efac' },
+        ]}
+      />
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard label="إجمالي التأخر" value={filteredByStage.length} color="#ea580c" />
-        <StatCard label="تأخر اليوم" value={todayRecords.length} color="#0891b2" />
-        <StatCard label="تأخر صباحي" value={filteredByStage.filter((r) => r.tardinessType === 'Morning').length} color="#dc2626" />
-        <StatCard label="تأخر عن الحصة" value={filteredByStage.filter((r) => r.tardinessType === 'Period').length} color="#ca8a04" />
-        <StatCard label="تم الإرسال" value={filteredByStage.filter((r) => r.isSent).length} color="#15803d" />
-      </div>
+      {/* Tabs — مطابق لـ .tabs-bar: 3 tabs مع Material Symbols بلون أحمر */}
+      <TabBar
+        tabs={[
+          { id: 'today', label: 'اليومي', icon: 'today' },
+          { id: 'approved', label: 'المعتمد', icon: 'verified' },
+          { id: 'reports', label: 'التقارير', icon: 'bar_chart' },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as TabType)}
+        sectionColor="#dc2626"
+      />
 
       {/* Stage Filter */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '14px', fontWeight: 700, color: '#6b7280' }}>المرحلة:</span>
         <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '4px' }}>
-          <FilterBtn label="الكل" count={records.length} active={stageFilter === '__all__'} onClick={() => setStageFilter('__all__')} color="#ea580c" />
+          <FilterBtn label="الكل" count={records.length} active={stageFilter === '__all__'} onClick={() => setStageFilter('__all__')} color="#dc2626" />
           {enabledStages.map((stage) => {
             const info = SETTINGS_STAGES.find((s) => s.id === stage.stage);
             const count = records.filter((r) => r.stage === stage.stage).length;
-            return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} color="#ea580c" />;
+            return <FilterBtn key={stage.stage} label={info?.name || stage.stage} count={count} active={stageFilter === (info?.name || stage.stage)} onClick={() => setStageFilter(info?.name || stage.stage)} color="#dc2626" />;
           })}
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '10px', padding: '4px', marginBottom: '16px' }}>
-        {[
-          { id: 'today' as TabType, label: 'اليوم', icon: '📅' },
-          { id: 'approved' as TabType, label: 'السجل التراكمي', icon: '📋' },
-          { id: 'reports' as TabType, label: 'التقارير', icon: '📊' },
-        ].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            flex: 1, padding: '10px 16px', borderRadius: '8px',
-            background: activeTab === tab.id ? '#fff' : 'transparent',
-            color: activeTab === tab.id ? '#ea580c' : '#6b7280',
-            fontWeight: 700, fontSize: '14px', border: 'none', cursor: 'pointer',
-            boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-          }}>
-            {tab.icon} {tab.label}
-          </button>
-        ))}
       </div>
 
       {activeTab === 'today' && <TodayTab records={todayRecords} onRefresh={loadData} stageFilter={stageFilter} schoolSettings={schoolSettings} />}
