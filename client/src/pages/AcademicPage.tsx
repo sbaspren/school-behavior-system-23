@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import MI from '../components/shared/MI';
 import { academicApi, AcademicStudentData, AcademicSubjectData } from '../api/academic';
 import { settingsApi, StageConfigData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
@@ -638,7 +639,7 @@ const AcademicPage: React.FC = () => {
                     } catch { showError('خطأ في التصدير'); }
                   }}
                     className="bg-teal-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-600 transition-all">
-                    📥 تصدير CSV
+                    <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>download</span> تصدير CSV
                   </button>
                 </div>
               </div>

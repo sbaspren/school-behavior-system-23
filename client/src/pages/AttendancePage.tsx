@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import MI from '../components/shared/MI';
 import PageHero from '../components/shared/PageHero';
 import TabBar from '../components/shared/TabBar';
 import FloatingBar from '../components/shared/FloatingBar';
@@ -108,7 +109,7 @@ const AttendancePage: React.FC = () => {
   const tc = tabColors[activeTab];
 
   return (
-    <div>
+    <div className="sec-tardiness">
       {/* ═══ Header — مطابق لسطر 56-68 ═══ */}
       {/* Hero Banner — الحضور اليومي */}
       <PageHero
@@ -211,19 +212,19 @@ const LateTab: React.FC<{ records: LateRow[]; onRefresh: () => void; onAdd: () =
       {/* Toolbar — مطابق لسطر 143-168 */}
       <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '16px', marginBottom: '12px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#dc2626', color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(220,38,38,0.3)' }}>➕ تسجيل تأخر</button>
-          <button onClick={onRefresh} style={{ padding: '10px 16px', background: '#f3f4f6', color: '#374151', borderRadius: '10px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>🔄 تحديث</button>
+          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#dc2626', color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(220,38,38,0.3)' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>add_circle</span> تسجيل تأخر</button>
+          <button onClick={onRefresh} style={{ padding: '10px 16px', background: '#f3f4f6', color: '#374151', borderRadius: '10px', fontWeight: 600, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث</button>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={toggleAll} style={{ padding: '8px 14px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}>☑️ تحديد الكل</button>
-          <button onClick={handleBulkSend} disabled={selected.size === 0} style={{ padding: '8px 14px', background: selected.size > 0 ? '#25d366' : '#d1d5db', color: '#fff', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}>📱 إرسال للمحددين</button>
-          <button onClick={handlePrint} style={{ padding: '8px 14px', background: '#ede9fe', color: '#6d28d9', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
+          <button onClick={handleBulkSend} disabled={selected.size === 0} style={{ padding: '8px 14px', background: selected.size > 0 ? '#25d366' : '#d1d5db', color: '#fff', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال للمحددين</button>
+          <button onClick={handlePrint} style={{ padding: '8px 14px', background: '#ede9fe', color: '#6d28d9', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
         </div>
       </div>
 
       {records.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px', background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '48px', margin: 0 }}>✅</p>
+          <p style={{ fontSize: '48px', margin: 0 }}><span className="material-symbols-outlined" style={{fontSize:16,color:'#15803d'}}>check_circle</span></p>
           <p style={{ fontSize: '18px', color: '#6b7280', fontWeight: 500, margin: '12px 0 4px' }}>لا يوجد متأخرون اليوم</p>
           <p style={{ fontSize: '13px', color: '#9ca3af' }}>اضغط على "تسجيل تأخر" لإضافة طالب متأخر</p>
         </div>
@@ -250,8 +251,8 @@ const LateTab: React.FC<{ records: LateRow[]; onRefresh: () => void; onAdd: () =
                     <td>{r.isSent ? <Badge label="تم ✓" bg="#dcfce7" color="#15803d" /> : <Badge label="لم يُرسل" bg="#fef3c7" color="#92400e" />}</td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                        <IconBtn icon="📱" title="إرسال" disabled={sendingId === r.id} onClick={() => setMsgRow(r)} />
-                        <IconBtn icon="🗑️" title="حذف" onClick={() => setConfirmDelete(r)} />
+                        <IconBtn icon="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span>" title="إرسال" disabled={sendingId === r.id} onClick={() => setMsgRow(r)} />
+                        <IconBtn icon="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span>" title="حذف" onClick={() => setConfirmDelete(r)} />
                       </div>
                     </td>
                   </tr>
@@ -314,19 +315,19 @@ const PermissionTab: React.FC<{ records: PermRow[]; onRefresh: () => void; onAdd
     <>
       <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb', padding: '16px', marginBottom: '12px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#7c3aed', color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}>➕ تسجيل استئذان</button>
-          <button onClick={onRefresh} style={{ padding: '10px 16px', background: '#f3f4f6', color: '#374151', borderRadius: '10px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>🔄 تحديث</button>
+          <button onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: '#7c3aed', color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.3)' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>add_circle</span> تسجيل استئذان</button>
+          <button onClick={onRefresh} style={{ padding: '10px 16px', background: '#f3f4f6', color: '#374151', borderRadius: '10px', fontWeight: 600, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث</button>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={toggleAll} style={{ padding: '8px 14px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}>☑️ تحديد الكل</button>
-          <button onClick={handleBulkSend} disabled={selected.size === 0} style={{ padding: '8px 14px', background: selected.size > 0 ? '#25d366' : '#d1d5db', color: '#fff', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}>📱 إرسال للمحددين</button>
-          <button onClick={handlePrint} style={{ padding: '8px 14px', background: '#ede9fe', color: '#6d28d9', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
+          <button onClick={handleBulkSend} disabled={selected.size === 0} style={{ padding: '8px 14px', background: selected.size > 0 ? '#25d366' : '#d1d5db', color: '#fff', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال للمحددين</button>
+          <button onClick={handlePrint} style={{ padding: '8px 14px', background: '#ede9fe', color: '#6d28d9', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
         </div>
       </div>
 
       {records.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px', background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '48px', margin: 0 }}>🚪</p>
+          <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>door_front</span>
           <p style={{ fontSize: '18px', color: '#6b7280', fontWeight: 500, margin: '12px 0 4px' }}>لا يوجد مستأذنون اليوم</p>
           <p style={{ fontSize: '13px', color: '#9ca3af' }}>اضغط على "تسجيل استئذان" لإضافة طالب مستأذن</p>
         </div>
@@ -353,8 +354,8 @@ const PermissionTab: React.FC<{ records: PermRow[]; onRefresh: () => void; onAdd
                   <td>{r.isSent ? <Badge label="تم ✓" bg="#dcfce7" color="#15803d" /> : <Badge label="لم يُرسل" bg="#fef3c7" color="#92400e" />}</td>
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                      <IconBtn icon="📱" title="إرسال" disabled={sendingId === r.id} onClick={() => setMsgRow(r)} />
-                      <IconBtn icon="🗑️" title="حذف" onClick={() => setConfirmDelete(r)} />
+                      <IconBtn icon="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span>" title="إرسال" disabled={sendingId === r.id} onClick={() => setMsgRow(r)} />
+                      <IconBtn icon="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span>" title="حذف" onClick={() => setConfirmDelete(r)} />
                     </div>
                   </td>
                 </tr>
@@ -437,7 +438,7 @@ const ArchiveTab: React.FC<{ stageId: string | null }> = ({ stageId }) => {
             <input type="text" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="مثال: 1447/12/30" style={{ width: '100%', height: '40px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' }} />
           </div>
           <button onClick={loadArchive} style={{ height: '40px', padding: '0 20px', background: '#4f46e5', color: '#fff', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>🔍 بحث</button>
-          <button onClick={handlePrint} disabled={archiveRecords.length === 0} style={{ height: '40px', padding: '0 20px', background: archiveRecords.length > 0 ? '#ede9fe' : '#f3f4f6', color: archiveRecords.length > 0 ? '#6d28d9' : '#9ca3af', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>🖨️ طباعة</button>
+          <button onClick={handlePrint} disabled={archiveRecords.length === 0} style={{ height: '40px', padding: '0 20px', background: archiveRecords.length > 0 ? '#ede9fe' : '#f3f4f6', color: archiveRecords.length > 0 ? '#6d28d9' : '#9ca3af', borderRadius: '10px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
         </div>
       </div>
 
@@ -445,7 +446,7 @@ const ArchiveTab: React.FC<{ stageId: string | null }> = ({ stageId }) => {
         <div style={{ textAlign: 'center', padding: '64px' }}><div className="spinner" /><p style={{ color: '#666', marginTop: '16px' }}>جاري تحميل الأرشيف...</p></div>
       ) : !searched ? (
         <div style={{ textAlign: 'center', padding: '64px', background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-          <p style={{ fontSize: '48px', margin: 0 }}>📦</p>
+          <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>inventory_2</span>
           <p style={{ fontSize: '16px', color: '#6b7280' }}>اختر النوع والتاريخ ثم اضغط بحث</p>
         </div>
       ) : archiveRecords.length === 0 ? (
@@ -521,7 +522,7 @@ const AddLateModal: React.FC<{ students: StudentOption[]; stageId: string | null
   };
 
   return (
-    <ModalShell title="تسجيل تأخر" icon="⏰" gradientFrom="#fee2e2" gradientTo="#fef2f2" borderColor="#fecaca" onClose={onClose}>
+    <ModalShell title="تسجيل تأخر" icon="schedule" gradientFrom="#fee2e2" gradientTo="#fef2f2" borderColor="#fecaca" onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Type */}
         <div>
@@ -584,7 +585,7 @@ const AddPermModal: React.FC<{ students: StudentOption[]; stageId: string | null
   };
 
   return (
-    <ModalShell title="تسجيل استئذان" icon="🚪" gradientFrom="#ede9fe" gradientTo="#f5f3ff" borderColor="#ddd6fe" onClose={onClose}>
+    <ModalShell title="تسجيل استئذان" icon="door_front" gradientFrom="#ede9fe" gradientTo="#f5f3ff" borderColor="#ddd6fe" onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <StudentPicker search={search} setSearch={setSearch} filtered={filtered} selected={selectedStudents} onAdd={(s) => { setSelectedStudents((p) => [...p, s]); setSearch(''); }} onRemove={(id) => setSelectedStudents((p) => p.filter((s) => s.id !== id))} accentColor="#7c3aed" accentBg="#ede9fe" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -720,7 +721,7 @@ const SendMsgModal: React.FC<{
       <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', width: '100%', maxWidth: '520px', overflow: 'hidden' }}>
         <div style={{ padding: '16px 24px', background: 'linear-gradient(to left, #dcfce7, #f0fdf4)', borderBottom: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#15803d' }}>📱 إرسال رسالة واتساب</h3>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#15803d' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال رسالة واتساب</h3>
             <span style={{ fontSize: '13px', color: '#4b5563' }}>{name} - {mobile || 'لا يوجد رقم'}</span>
           </div>
           <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
@@ -731,7 +732,7 @@ const SendMsgModal: React.FC<{
         </div>
         <div style={{ padding: '16px 24px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
-          <button onClick={() => onSend(message)} style={{ padding: '10px 24px', background: '#25d366', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>📱 إرسال</button>
+          <button onClick={() => onSend(message)} style={{ padding: '10px 24px', background: '#25d366', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال</button>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import MI from '../components/shared/MI';
 import PageHero from '../components/shared/PageHero';
 import TabBar from '../components/shared/TabBar';
 import EmptyState from '../components/shared/EmptyState';
@@ -22,7 +23,7 @@ const NOOR_TABS: Record<string, TabDef> = {
   tardiness:    { id: 'tardiness',    icon: '⏱️', label: 'تأخر',          color: '#f59e0b', desc: 'سجلات التأخر الصباحي — تُدخل كمخالفة الدرجة الأولى' },
   compensation: { id: 'compensation', icon: '🔄', label: 'تعويضية',       color: '#3b82f6', desc: 'درجات التعويض — فرص تعويض للطلاب المخصوم منهم' },
   excellent:    { id: 'excellent',    icon: '🌟', label: 'سلوك متمايز',   color: '#22c55e', desc: 'السلوك المتمايز للطلاب المتميزين' },
-  absence:      { id: 'absence',     icon: '📅', label: 'غياب يومي',     color: '#f97316', desc: 'سجلات الغياب اليومي — يُدخل في نفس اليوم فقط' },
+  absence:      { id: 'absence',     icon: 'event_busy', label: 'غياب يومي',     color: '#f97316', desc: 'سجلات الغياب اليومي — يُدخل في نفس اليوم فقط' },
 };
 const TAB_ORDER = ['violations', 'tardiness', 'compensation', 'excellent', 'absence'];
 
@@ -386,7 +387,7 @@ const NoorPage: React.FC = () => {
   const currentTabDef = NOOR_TABS[activeTab];
 
   return (
-    <div>
+    <div className="sec-noor">
       {/* Hero Banner — مطابق لـ .page-hero: gradient أخضر غامق نور */}
       <PageHero
         title="التوثيق في نور"
@@ -459,7 +460,7 @@ const NoorPage: React.FC = () => {
             <>
               <button onClick={() => sendToExt({ source: 'school-system', action: 'ping' })}
                 style={{ padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700, background: '#f3f4f6', color: '#374151', border: '2px solid #d1d5db', cursor: 'pointer' }}>
-                🔄 تحديث الحالة
+                <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث الحالة
               </button>
               <button onClick={noorDisconnect}
                 style={{ padding: '6px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 700, background: '#f3f4f6', color: '#374151', border: '2px solid #d1d5db', cursor: 'pointer' }}>
@@ -552,7 +553,7 @@ const NoorPage: React.FC = () => {
               display: 'flex', alignItems: 'center', gap: '6px',
             }}
           >
-            🔄 تحديث السجلات
+            <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث السجلات
           </button>
           <span style={{ fontSize: '13px', color: '#9ca3af' }}>
             {records.length > 0 ? `${records.length} سجل` : ''}
@@ -632,7 +633,7 @@ const NoorPage: React.FC = () => {
           </div>
         ) : records.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px', color: '#9ca3af' }}>
-            <p style={{ fontSize: '36px', margin: '0 0 8px' }}>✅</p>
+            <p style={{ fontSize: '36px', margin: '0 0 8px' }}><span className="material-symbols-outlined" style={{fontSize:16,color:'#15803d'}}>check_circle</span></p>
             <p style={{ fontSize: '16px', fontWeight: 500 }}>لا توجد سجلات معلقة</p>
           </div>
         ) : (
@@ -780,7 +781,7 @@ const NoorPage: React.FC = () => {
       {confirmOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px', maxWidth: '400px', width: '90%', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>☁️</div>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>cloud</span></div>
             <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>تأكيد التوثيق في نور</h3>
             <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '20px' }}>
               سيتم تحديث <strong style={{ color: '#4f46e5' }}>{selected.size}</strong> سجل كـ "تم" في نور

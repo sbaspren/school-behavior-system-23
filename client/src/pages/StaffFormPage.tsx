@@ -175,11 +175,11 @@ export default function StaffFormPage() {
       <div style={{ ...S.header, background: headerBg }}>
         <div style={S.hdrRow}>
           <div>
-            <h1 style={S.hdrTitle}>📋 التأخر والاستئذان</h1>
+            <h1 style={S.hdrTitle}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> التأخر والاستئذان</h1>
             <div style={S.hdrSub}>👤 {staff.name}{staff.role ? ` — ${staff.role}` : ''}</div>
           </div>
           <button onClick={doRefresh} style={S.hdrBtn}>
-            <span style={refreshing ? { display: 'inline-block', animation: 'spin .8s linear infinite' } : {}}>🔄</span>
+            <span style={refreshing ? { display: 'inline-block', animation: 'spin .8s linear infinite' } : {}}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span></span>
           </button>
         </div>
       </div>
@@ -244,7 +244,7 @@ export default function StaffFormPage() {
         {/* Card: Students */}
         <div style={{ ...S.card, borderColor: tab === 'perm' ? 'rgba(59,130,246,.15)' : 'rgba(234,88,12,.15)' }}>
           <div style={S.cardTitle}>
-            👥 {tab === 'perm' ? 'الطلاب' : 'المتأخرين'}
+            <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>groups</span> {tab === 'perm' ? 'الطلاب' : 'المتأخرين'}
             {selected.length > 0 && (
               <span style={{ ...S.badge, background: tabColor }}>{selected.length}</span>
             )}
@@ -310,7 +310,7 @@ export default function StaffFormPage() {
               background: canSubmit ? (tab === 'perm' ? 'linear-gradient(135deg,#1e40af,#3b82f6)' : 'linear-gradient(135deg,#c2410c,#ea580c)') : '#d1d5db',
               opacity: submitting ? 0.6 : 1,
             }}>
-            {submitting ? '⏳ جاري...' : tab === 'perm' ? '✅ تسجيل الاستئذان' : '✅ تسجيل التأخر'}
+            {submitting ? 'جاري الإرسال...' : tab === 'perm' ? '✅ تسجيل الاستئذان' : 'تسجيل التأخر'}
           </button>
           <button onClick={openLog} style={S.btnL}>📜</button>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import MI from '../components/shared/MI';
 import PageHero from '../components/shared/PageHero';
 import TabBar from '../components/shared/TabBar';
 import ActionBar from '../components/shared/ActionBar';
@@ -107,7 +108,7 @@ const EducationalNotesPage: React.FC = () => {
   const stageName = (id: string) => SETTINGS_STAGES.find(s => s.id === id)?.name || id;
 
   return (
-    <div>
+    <div className="sec-notes">
       {/* Hero Banner — مطابق لـ .page-hero: gradient أخضر + عدادات */}
       <PageHero
         title={`الملاحظات التربوية — ${stageName(currentStage)}`}
@@ -331,7 +332,7 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
                       ) : (
                         <button onClick={() => handleSendWhatsApp(r)} style={{ padding: '2px 8px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '100px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>إرسال</button>
                       )}
-                      <button onClick={() => { printForm('tawtheeq_tawasol', { studentName: r.studentName, grade: r.grade + ' / ' + r.className, contactType: 'ملاحظة تربوية', contactReason: (r.noteType || '') + (r.details ? ' - ' + r.details : ''), violationDate: r.hijriDate || '', contactResult: r.isSent ? 'تم التواصل عبر الواتساب' : 'لم يتم الإرسال بعد', notes: 'المسجّل: ' + (r.teacherName || '-') }); }} style={{ padding: '2px 6px', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }} title="توثيق تواصل">📞</button>
+                      <button onClick={() => { printForm('tawtheeq_tawasol', { studentName: r.studentName, grade: r.grade + ' / ' + r.className, contactType: 'ملاحظة تربوية', contactReason: (r.noteType || '') + (r.details ? ' - ' + r.details : ''), violationDate: r.hijriDate || '', contactResult: r.isSent ? 'تم التواصل عبر الواتساب' : 'لم يتم الإرسال بعد', notes: 'المسجّل: ' + (r.teacherName || '-') }); }} style={{ padding: '2px 6px', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }} title="توثيق تواصل"><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>contact_phone</span></button>
                       <button onClick={() => handleDelete(r.id)} style={{ padding: '2px 6px', background: '#fef2f2', color: '#dc2626', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>حذف</button>
                     </div>
                   </td>
@@ -372,9 +373,9 @@ const TodayTab: React.FC<{ stage: string; noteTypes: string[]; onRefresh: () => 
             <span style={{ fontSize: '13px' }}>محدد</span>
           </span>
           <span style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.3)' }} />
-          <button onClick={printToday} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🖨️ طباعة</button>
-          <button onClick={handleBulkSend} disabled={sending} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#a7f3d0', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>{sending ? '⏳ جاري...' : '📱 إرسال'}</button>
-          <button onClick={handleBulkDelete} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>🗑️ حذف</button>
+          <button onClick={printToday} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
+          <button onClick={handleBulkSend} disabled={sending} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#a7f3d0', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>{sending ? 'جاري الإرسال...' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال'}</button>
+          <button onClick={handleBulkDelete} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span> حذف</button>
           <button onClick={() => setSelected(new Set())} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '16px', marginRight: '4px' }}>✕</button>
         </div>
       )}
@@ -629,7 +630,7 @@ const ApprovedTab: React.FC<{ stage: string; noteTypes: string[]; schoolSettings
                       : <span style={{ padding: '2px 8px', background: '#fff7ed', color: '#9a3412', borderRadius: '100px', fontSize: '10px', fontWeight: 700 }}>لم يُرسل</span>
                     }
                     <span style={{ fontSize: '11px', color: '#9ca3af' }}>{n.teacherName || ''}</span>
-                    <button onClick={() => { printForm('tawtheeq_tawasol', { studentName: detailStudent.name, grade: detailStudent.grade + ' / ' + detailStudent.cls, contactType: 'ملاحظة تربوية', contactReason: n.noteType + (n.details ? ' - ' + n.details : ''), violationDate: n.hijriDate || '', contactResult: n.isSent ? 'تم التواصل عبر الواتساب' : 'لم يتم الإرسال بعد', notes: 'المسجّل: ' + (n.teacherName || '-') }); }} style={{ padding: '2px 8px', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>📞 توثيق تواصل</button>
+                    <button onClick={() => { printForm('tawtheeq_tawasol', { studentName: detailStudent.name, grade: detailStudent.grade + ' / ' + detailStudent.cls, contactType: 'ملاحظة تربوية', contactReason: n.noteType + (n.details ? ' - ' + n.details : ''), violationDate: n.hijriDate || '', contactResult: n.isSent ? 'تم التواصل عبر الواتساب' : 'لم يتم الإرسال بعد', notes: 'المسجّل: ' + (n.teacherName || '-') }); }} style={{ padding: '2px 8px', background: '#f0fdfa', color: '#0d9488', border: '1px solid #99f6e4', borderRadius: '8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>contact_phone</span> توثيق تواصل</button>
                   </div>
                 </div>
               ))}

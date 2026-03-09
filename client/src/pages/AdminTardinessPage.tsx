@@ -119,11 +119,11 @@ const AdminTardinessPage: React.FC = () => {
       <div style={S.header}>
         <div style={S.hdrRow}>
           <div>
-            <h1 style={S.hdrTitle}>⏰ تسجيل التأخر الصباحي</h1>
+            <h1 style={S.hdrTitle}><span className="material-symbols-outlined" style={{fontSize:24,verticalAlign:'middle'}}>timer_off</span> تسجيل التأخر الصباحي</h1>
             <div style={S.hdrSub}>👤 {pageData.staff.name}{pageData.staff.role ? ` — ${pageData.staff.role}` : ''}</div>
           </div>
           <button onClick={doRefresh} style={S.hdrBtn}>
-            <span style={refreshing ? { display: 'inline-block', animation: 'spin .8s linear infinite' } : {}}>🔄</span>
+            <span style={refreshing ? { display: 'inline-block', animation: 'spin .8s linear infinite' } : {}}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span></span>
           </button>
         </div>
       </div>
@@ -151,7 +151,7 @@ const AdminTardinessPage: React.FC = () => {
 
         <div style={S.card}>
           <div style={S.cardTitle}>
-            👥 المتأخرين
+            <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>groups</span> المتأخرين
             {selected.length > 0 && <span style={S.badge}>{selected.length}</span>}
           </div>
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
@@ -199,7 +199,7 @@ const AdminTardinessPage: React.FC = () => {
         <div style={S.bbarIn}>
           <button onClick={handleSubmit} disabled={!canSubmit || submitting}
             style={{ ...S.btnS, opacity: canSubmit && !submitting ? 1 : 0.4 }}>
-            {submitting ? '⏳ جاري...' : '✅ تسجيل التأخر'}
+            {submitting ? 'جاري الإرسال...' : 'تسجيل التأخر'}
           </button>
         </div>
       </div>

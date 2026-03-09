@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import MI from '../components/shared/MI';
 import PageHero from '../components/shared/PageHero';
 import TabBar from '../components/shared/TabBar';
 import ActionBar from '../components/shared/ActionBar';
@@ -96,7 +97,7 @@ const AbsencePage: React.FC = () => {
   }
 
   return (
-    <div>
+    <div className="sec-absence">
       {/* Hero Banner — مطابق لـ .page-hero: gradient برتقالي + 4 عدادات */}
       <PageHero
         title={`الغياب${currentStageId ? ' — ' + stageFilter : ''}`}
@@ -400,12 +401,12 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
           <ImportDropdown onNoor={() => noorFileRef.current?.click()} onPlatform={() => platformFileRef.current?.click()} />
         </div>
         <button onClick={() => {/* opens modal from parent */}} style={btnStyle('#ea580c')}>+ تسجيل يدوي</button>
-        <button onClick={onRefresh} style={btnStyle('#6b7280', true)}>🔄 تحديث</button>
+        <button onClick={onRefresh} style={btnStyle('#6b7280', true)}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث</button>
         <div style={{ flex: 1 }} />
         <button onClick={handleSendAll} disabled={bulkSending} style={btnStyle('#25d366')}>
-          {bulkSending ? `⏳ ${bulkProgress.sent}/${bulkProgress.total}` : '📱 إرسال للجميع'}
+          {bulkSending ? `⏳ ${bulkProgress.sent}/${bulkProgress.total}` : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال للجميع'}
         </button>
-        <button onClick={() => handlePrintToday(true)} style={btnStyle('#4f46e5', true)}>🖨️ طباعة الكشف</button>
+        <button onClick={() => handlePrintToday(true)} style={btnStyle('#4f46e5', true)}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة الكشف</button>
       </div>
 
       {/* Search */}
@@ -415,10 +416,10 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
       {/* Table with grouped display */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>
-          <span style={{ fontSize: 60, color: '#d1d5db' }}>📅</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>event_busy</span>
           <p style={{ color: '#6b7280', marginTop: 12, fontSize: 16 }}>لا يوجد غياب مسجل اليوم</p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
-            <button onClick={() => noorFileRef.current?.click()} style={btnStyle('#16a34a')}>📤 استيراد Excel</button>
+            <button onClick={() => noorFileRef.current?.click()} style={btnStyle('#16a34a')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span> استيراد Excel</button>
           </div>
         </div>
       ) : (
@@ -458,7 +459,7 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
                         <td style={{ padding: '8px', fontSize: 12, color: teacher === '-' ? '#9ca3af' : '#374151' }}>{teacher}</td>
                         <td style={{ padding: '8px' }}>
                           {isLate ? (
-                            <button onClick={() => openLateModal(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: '#fef3c7', color: '#a16207', borderRadius: 12, fontSize: 11, fontWeight: 700, border: '1px solid #fde68a', cursor: 'pointer' }}>⏰ متأخر {r.arrivalTime}</button>
+                            <button onClick={() => openLateModal(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: '#fef3c7', color: '#a16207', borderRadius: 12, fontSize: 11, fontWeight: 700, border: '1px solid #fde68a', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:12,verticalAlign:'middle'}}>schedule</span> متأخر {r.arrivalTime}</button>
                           ) : (
                             <button onClick={() => handleToggleExcuse(r)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: isExcused ? '#dcfce7' : '#fee2e2', color: isExcused ? '#15803d' : '#dc2626', borderRadius: 12, fontSize: 11, fontWeight: 700, border: `1px solid ${isExcused ? '#bbf7d0' : '#fecaca'}`, cursor: 'pointer' }}>
                               {isExcused ? '✅ بعذر' : '❌ بدون عذر'}
@@ -468,15 +469,15 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
                         <td style={{ padding: '6px 8px' }}>
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                             <button onClick={() => handleSendWhatsApp(r)} disabled={sendingId === r.id} style={{ padding: '4px 8px', background: r.isSent ? '#dcfce7' : '#f3f4f6', color: r.isSent ? '#15803d' : '#374151', borderRadius: 6, border: `1px solid ${r.isSent ? '#bbf7d0' : '#d1d5db'}`, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
-                              {r.isSent ? '✅ تم' : '📱 واتساب'}
+                              {r.isSent ? 'تم ✓' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> واتساب'}
                             </button>
-                            <button onClick={() => handlePrintForm('tahood_hodoor', r)} style={miniBtn('#6366f1')} title="تعهد حضور">📋</button>
-                            <button onClick={() => handlePrintForm('ehalat_absence', r)} style={miniBtn('#2563eb')} title="إحالة غياب">📤</button>
-                            <button onClick={() => handlePrintForm('tawtheeq_tawasol', r)} style={miniBtn('#15803d')} title="توثيق تواصل">📞</button>
+                            <button onClick={() => handlePrintForm('tahood_hodoor', r)} style={miniBtn('#6366f1')} title="تعهد حضور"><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span></button>
+                            <button onClick={() => handlePrintForm('ehalat_absence', r)} style={miniBtn('#2563eb')} title="إحالة غياب"><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span></button>
+                            <button onClick={() => handlePrintForm('tawtheeq_tawasol', r)} style={miniBtn('#15803d')} title="توثيق تواصل"><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>contact_phone</span></button>
                           </div>
                         </td>
                         <td style={{ padding: '6px', textAlign: 'center' }}>
-                          <button onClick={() => setConfirmDelete(r)} style={{ padding: 4, background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 14 }}>🗑️</button>
+                          <button onClick={() => setConfirmDelete(r)} style={{ padding: 4, background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 14 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span></button>
                         </td>
                       </tr>
                     );
@@ -503,18 +504,18 @@ const TodayTab: React.FC<{ records: AbsenceRow[]; allRecords: AbsenceRow[]; onRe
       {/* Selection bar */}
       {selected.size > 0 && (
         <div style={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(31,41,55,0.95)', color: '#fff', padding: '12px 24px', borderRadius: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 16, zIndex: 50, backdropFilter: 'blur(8px)' }}>
-          <span>✅ <strong>{selected.size}</strong> محدد</span>
+          <span><span className="material-symbols-outlined" style={{fontSize:14,verticalAlign:'middle',color:'#a7f3d0'}}>check_circle</span> <strong>{selected.size}</strong> محدد</span>
           <span style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.3)' }} />
-          <button onClick={() => handlePrintToday()} style={{ color: '#c4b5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🖨️ طباعة</button>
-          <button onClick={handleSendBulk} style={{ color: '#86efac', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📱 إرسال</button>
+          <button onClick={() => handlePrintToday()} style={{ color: '#c4b5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
+          <button onClick={handleSendBulk} style={{ color: '#86efac', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال</button>
           {selected.size === 1 && (() => {
             const r = filtered.find(x => selected.has(x.id));
             return r ? (<>
-              <button onClick={() => handlePrintForm('tahood_hodoor', r)} style={{ color: '#fde68a', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📋 تعهد فردي</button>
-              <button onClick={() => handlePrintForm('ehalat_absence', r)} style={{ color: '#93c5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>📤 إحالة فردي</button>
+              <button onClick={() => handlePrintForm('tahood_hodoor', r)} style={{ color: '#fde68a', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> تعهد فردي</button>
+              <button onClick={() => handlePrintForm('ehalat_absence', r)} style={{ color: '#93c5fd', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span> إحالة فردي</button>
             </>) : null;
           })()}
-          <button onClick={handleDeleteBulk} style={{ color: '#fca5a5', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🗑️ حذف</button>
+          <button onClick={handleDeleteBulk} style={{ color: '#fca5a5', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span> حذف</button>
           <button onClick={() => setSelected(new Set())} style={{ color: 'rgba(255,255,255,0.6)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -633,7 +634,7 @@ const AdvancedMessageEditor: React.FC<{
   }, []);
 
   const buildMessage = useCallback((withLink: boolean, link: string) => {
-    let msg = `📋 *إشعار غياب*\n\nالسلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: *${row.studentName}*\n\nنفيدكم بأن ابنكم *${row.studentName}* غائب اليوم\n📅 ${dayName} - ${hijri}\nالصف: ${row.grade} - الفصل: ${row.className}`;
+    let msg = `<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> *إشعار غياب*\n\nالسلام عليكم ورحمة الله وبركاته\nولي أمر الطالب: *${row.studentName}*\n\nنفيدكم بأن ابنكم *${row.studentName}* غائب اليوم\n📅 ${dayName} - ${hijri}\nالصف: ${row.grade} - الفصل: ${row.className}`;
     if (withLink && link) {
       msg += `\n\n📝 *لتقديم عذر الغياب:*\nاضغط على الرابط التالي لكتابة عذر الغياب:\n${link}\n⏳ الرابط صالح لمدة ٢٤ ساعة فقط`;
     }
@@ -705,7 +706,7 @@ const AdvancedMessageEditor: React.FC<{
     <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ ...modalBox, maxWidth: 520 }}>
         <div style={{ padding: '12px 20px', background: '#25d366', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>✏️ تعديل الرسالة قبل الإرسال</h3>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>edit</span> تعديل الرسالة قبل الإرسال</h3>
           <button onClick={onClose} style={{ ...closeBtn, color: 'rgba(255,255,255,0.8)' }}>✕</button>
         </div>
         <div style={{ padding: '10px 20px', background: '#f0fdf4', borderBottom: '1px solid #d1fae5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -734,12 +735,12 @@ const AdvancedMessageEditor: React.FC<{
         <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={handleSaveTemplate} style={{ padding: '6px 12px', background: '#2563eb', color: '#fff', borderRadius: 8, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer' }}>🔖 حفظ كقالب افتراضي</button>
-            <button onClick={handleResetTemplate} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#4b5563', borderRadius: 8, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer' }}>🔄 استعادة</button>
+            <button onClick={handleResetTemplate} style={{ padding: '6px 12px', background: '#e5e7eb', color: '#4b5563', borderRadius: 8, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> استعادة</button>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={onClose} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>إلغاء</button>
             <button onClick={() => onSend(message)} disabled={sending || !message.trim()} style={{ padding: '8px 20px', background: '#25d366', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1 }}>
-              {sending ? 'جاري الإرسال...' : '📱 إرسال'}
+              {sending ? 'جاري الإرسال...' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال'}
             </button>
           </div>
         </div>
@@ -912,14 +913,14 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
           <option value="week">هذا الأسبوع</option>
           <option value="month">هذا الشهر</option>
         </select>
-        <button onClick={handlePrint} style={btnStyle('#7c3aed', true)}>🖨️ طباعة</button>
-        <button onClick={onRefresh} style={btnStyle('#6b7280', true)}>🔄</button>
+        <button onClick={handlePrint} style={btnStyle('#7c3aed', true)}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
+        <button onClick={onRefresh} style={btnStyle('#6b7280', true)}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span></button>
       </div>
 
       {/* Excuses list */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>
-          <span style={{ fontSize: 60, color: '#d1d5db' }}>📝</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>edit_note</span>
           <p style={{ color: '#6b7280', marginTop: 12, fontSize: 16 }}>لا توجد أعذار</p>
           <p style={{ color: '#9ca3af', fontSize: 13 }}>ستظهر هنا الأعذار المقدمة من أولياء الأمور</p>
         </div>
@@ -929,7 +930,7 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
           {groupedByDay.map(group => (
             <div key={group.day} style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 4px' }}>
-                <span style={{ fontSize: 16, color: '#7c3aed' }}>📅</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>event_busy</span>
                 <h3 style={{ fontWeight: 700, color: '#7c3aed', fontSize: 14, margin: 0 }}>{group.day} <span style={{ color: '#9ca3af', fontWeight: 400 }}>({group.items.length})</span></h3>
                 <div style={{ flex: 1, height: 1, background: '#e9d5ff' }} />
               </div>
@@ -951,7 +952,7 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
         <div style={modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setSelectedExcuse(null); }}>
           <div style={{ ...modalBox, maxWidth: 500, maxHeight: '90vh', overflow: 'auto' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📋 تفاصيل العذر</h3>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> تفاصيل العذر</h3>
               <button onClick={() => setSelectedExcuse(null)} style={closeBtn}>✕</button>
             </div>
             <div style={{ padding: 20 }}>
@@ -975,7 +976,7 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>✏️ سبب الغياب / العذر</label>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>edit</span> سبب الغياب / العذر</label>
                 <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: 16, color: '#1f2937', lineHeight: 1.6 }}>{selectedExcuse.excuseText || 'لم يُحدد'}</div>
               </div>
               {selectedExcuse.attachments !== 'لا' && (
@@ -988,11 +989,11 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
             <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               {selectedExcuse.status === 'معلق' && (
                 <>
-                  <button onClick={() => handleApprove(selectedExcuse.id)} disabled={actionLoading} style={{ padding: '8px 16px', background: '#16a34a', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>✅ قبول</button>
-                  <button onClick={() => { setRejectModal(selectedExcuse); setSelectedExcuse(null); }} style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>❌ رفض</button>
+                  <button onClick={() => handleApprove(selectedExcuse.id)} disabled={actionLoading} style={{ padding: '8px 16px', background: '#16a34a', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:14,verticalAlign:'middle'}}>check_circle</span> قبول</button>
+                  <button onClick={() => { setRejectModal(selectedExcuse); setSelectedExcuse(null); }} style={{ padding: '8px 16px', background: '#dc2626', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:14,verticalAlign:'middle'}}>cancel</span> رفض</button>
                 </>
               )}
-              <button onClick={() => handleDelete(selectedExcuse.id)} style={{ padding: '8px 16px', color: '#dc2626', background: '#fff', border: '1px solid #fecaca', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>🗑️ حذف</button>
+              <button onClick={() => handleDelete(selectedExcuse.id)} style={{ padding: '8px 16px', color: '#dc2626', background: '#fff', border: '1px solid #fecaca', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 12 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span> حذف</button>
               <button onClick={() => setSelectedExcuse(null)} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}>إغلاق</button>
             </div>
           </div>
@@ -1040,7 +1041,7 @@ const ExcusesTab: React.FC<{ excuses: ParentExcuseRow[]; onRefresh: () => void; 
             </div>
             <div style={{ padding: '12px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setMessageModal(null)} style={{ padding: '8px 16px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
-              <button onClick={handleSendMessage} disabled={actionLoading} style={{ padding: '8px 20px', background: '#2563eb', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}>📱 إرسال</button>
+              <button onClick={handleSendMessage} disabled={actionLoading} style={{ padding: '8px 20px', background: '#2563eb', color: '#fff', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال</button>
             </div>
           </div>
         </div>
@@ -1176,7 +1177,7 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
 
   const filterBtns = [
     { id: 'all', label: 'الكل', bg: '#f3f4f6', color: '#374151' },
-    { id: 'zero', label: '🌟 المنضبطين', bg: '#dcfce7', color: '#15803d' },
+    { id: 'zero', label: 'المنضبطين', bg: '#dcfce7', color: '#15803d' },
     null, // separator
     { id: 'warning', label: 'إنذار (3-4)', bg: '#fef9c3', color: '#a16207', group: 'بدون عذر' },
     { id: 'danger', label: 'لجنة (5-9)', bg: '#ffedd5', color: '#c2410c' },
@@ -1191,10 +1192,10 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
     <>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={handlePrint} style={btnStyle('#4f46e5')}>🖨️ طباعة القوائم</button>
-        <button onClick={handlePrintDiscipline} style={btnStyle('#16a34a')}>🌟 كشف المنضبطين</button>
-        <button onClick={handlePrintContactReport} style={btnStyle('#0891b2')}>📞 تقرير التواصل</button>
-        <button onClick={handleBulkSend} disabled={sending} style={btnStyle('#25d366')}>📱 إرسال</button>
+        <button onClick={handlePrint} style={btnStyle('#4f46e5')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة القوائم</button>
+        <button onClick={handlePrintDiscipline} style={btnStyle('#16a34a')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>stars</span> كشف المنضبطين</button>
+        <button onClick={handlePrintContactReport} style={btnStyle('#0891b2')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>contact_phone</span> تقرير التواصل</button>
+        <button onClick={handleBulkSend} disabled={sending} style={btnStyle('#25d366')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال</button>
       </div>
 
       {/* Filters */}
@@ -1217,7 +1218,7 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
         </select>
         <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', borderRadius: 8, padding: 2 }}>
           <button onClick={() => setViewMode('cards')} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: 13 }}>🎴</button>
-          <button onClick={() => setViewMode('table')} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: 13 }}>📋</button>
+          <button onClick={() => setViewMode('table')} style={{ padding: '4px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#ea580c' : '#6b7280', fontWeight: 700, fontSize: 13 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span></button>
         </div>
       </div>
 
@@ -1241,8 +1242,8 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
           <span style={{ fontWeight: 700, color: '#f97316' }}>{selected.size} طالب</span>
           <div style={{ flex: 1 }} />
           <button onClick={() => handleGroupPrint('group_tahood')} style={{ padding: '4px 12px', background: '#16a34a', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}>📄 كشف تعهد</button>
-          <button onClick={() => handleGroupPrint('group_ehala')} style={{ padding: '4px 12px', background: '#7c3aed', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}>📤 كشف إحالة</button>
-          <button onClick={handleBulkSend} disabled={sending} style={{ padding: '4px 12px', background: '#25d366', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer', fontSize: 11 }}>📱 واتساب</button>
+          <button onClick={() => handleGroupPrint('group_ehala')} style={{ padding: '4px 12px', background: '#7c3aed', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span> كشف إحالة</button>
+          <button onClick={handleBulkSend} disabled={sending} style={{ padding: '4px 12px', background: '#25d366', color: '#fff', borderRadius: 6, border: 'none', fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer', fontSize: 11 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> واتساب</button>
           <button onClick={() => setSelected(new Set())} style={{ padding: '4px 8px', background: '#374151', color: '#9ca3af', borderRadius: 6, border: 'none', cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -1250,7 +1251,7 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
       {/* Content */}
       {sorted.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>
-          <span style={{ fontSize: 50, color: '#d1d5db' }}>📋</span>
+          <span style={{ fontSize: 50, color: '#d1d5db' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span></span>
           <p style={{ color: '#6b7280', marginTop: 12 }}>لا توجد سجلات مطابقة</p>
         </div>
       ) : viewMode === 'cards' ? (
@@ -1260,13 +1261,13 @@ const ApprovedTab: React.FC<{ records: CumulativeRow[]; dailyRecords: AbsenceRow
             const att = getAttendance(r);
             const badge = getBadge(u);
             let actions: React.ReactNode[] = [];
-            if (u >= 3 || e >= 3) actions.push(<button key="ref" onClick={() => handlePrintForm('ehalat_absence', r)} style={cardBtn('#3b82f6', '#eff6ff')}>📤 تحويل للموجه</button>);
+            if (u >= 3 || e >= 3) actions.push(<button key="ref" onClick={() => handlePrintForm('ehalat_absence', r)} style={cardBtn('#3b82f6', '#eff6ff')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span> تحويل للموجه</button>);
             if (u >= 3) {
-              actions.push(<button key="rec" onClick={() => handlePrintForm('ghiab_bidon_ozr', r)} style={cardBtn('#4b5563', '#f9fafb')}>📋 سجل بدون عذر</button>);
-              actions.push(<button key="com" onClick={() => handlePrintForm('tahood_hodoor', r)} style={cardBtn('#16a34a', '#dcfce7')}>✅ نموذج عذر</button>);
+              actions.push(<button key="rec" onClick={() => handlePrintForm('ghiab_bidon_ozr', r)} style={cardBtn('#4b5563', '#f9fafb')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> سجل بدون عذر</button>);
+              actions.push(<button key="com" onClick={() => handlePrintForm('tahood_hodoor', r)} style={cardBtn('#16a34a', '#dcfce7')}><span className="material-symbols-outlined" style={{fontSize:14,verticalAlign:'middle'}}>check_circle</span> نموذج عذر</button>);
             }
-            if (e >= 3) actions.push(<button key="exc" onClick={() => handlePrintForm('ghiab_ozr', r)} style={cardBtn('#0891b2', '#ecfeff')}>📋 سجل بعذر</button>);
-            if (u >= 5) actions.push(<button key="laj" onClick={() => handlePrintForm('mahdar_lajnah_absence', r)} style={cardBtn('#7c3aed', '#f3e8ff')}>👥 لجنة توجيه</button>);
+            if (e >= 3) actions.push(<button key="exc" onClick={() => handlePrintForm('ghiab_ozr', r)} style={cardBtn('#0891b2', '#ecfeff')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> سجل بعذر</button>);
+            if (u >= 5) actions.push(<button key="laj" onClick={() => handlePrintForm('mahdar_lajnah_absence', r)} style={cardBtn('#7c3aed', '#f3e8ff')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>groups</span> لجنة توجيه</button>);
 
             return (
               <div key={r.studentId} style={{ background: '#fff', borderRadius: 14, border: `2px solid ${badge ? badge.color + '40' : '#e5e7eb'}`, padding: 16, position: 'relative' }}>
@@ -1394,22 +1395,22 @@ const ReportsTab: React.FC<{ records: AbsenceRow[]; cumulativeRecords: Cumulativ
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '2px solid #d1d5db', borderRadius: 8, fontSize: 13 }} /></div>
           <div><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>نوع الغياب</label>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={selectStyle}><option value="">الكل</option><option value="Excused">بعذر</option><option value="Unexcused">بدون عذر</option></select></div>
-          <button onClick={handlePrint} style={btnStyle('#7c3aed')}>🖨️ طباعة التقرير</button>
+          <button onClick={handlePrint} style={btnStyle('#7c3aed')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة التقرير</button>
         </div>
       </div>
 
       {/* Stats cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <StatCard label="إجمالي الغياب" value={filteredRecords.length} color="#ea580c" icon="📊" />
-        <StatCard label="بدون عذر" value={unexcusedCount} color="#dc2626" icon="❌" />
-        <StatCard label="بعذر" value={excusedCount} color="#2563eb" icon="✅" />
-        <StatCard label="تأخير" value={lateCount} color="#f59e0b" icon="⏰" />
+        <StatCard label="إجمالي الغياب" value={filteredRecords.length} color="#ea580c" icon="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>bar_chart</span>" />
+        <StatCard label="بدون عذر" value={unexcusedCount} color="#dc2626" icon="cancel" />
+        <StatCard label="بعذر" value={excusedCount} color="#2563eb" icon="check_circle" />
+        <StatCard label="تأخير" value={lateCount} color="#f59e0b" icon="schedule" />
       </div>
 
       {/* By Day */}
       {byDay.some(d => d.count > 0) && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 20, marginBottom: 20 }}>
-          <h4 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>📅 الغياب حسب اليوم</h4>
+          <h4 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}><span className="material-symbols-outlined" style={{fontSize:18,verticalAlign:'middle'}}>calendar_today</span> الغياب حسب اليوم</h4>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             {byDay.map(d => {
               const max = Math.max(...byDay.map(x => x.count), 1);
@@ -1507,8 +1508,8 @@ const ExcuseCard: React.FC<{
       </div>
       {isPending && (
         <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => onApprove(excuse.id)} style={{ flex: 1, padding: '6px 8px', background: '#dcfce7', color: '#15803d', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bbf7d0', cursor: 'pointer' }}>✅ قبول</button>
-          <button onClick={() => onReject(excuse)} style={{ flex: 1, padding: '6px 8px', background: '#fee2e2', color: '#dc2626', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #fecaca', cursor: 'pointer' }}>❌ رفض</button>
+          <button onClick={() => onApprove(excuse.id)} style={{ flex: 1, padding: '6px 8px', background: '#dcfce7', color: '#15803d', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bbf7d0', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:14,verticalAlign:'middle'}}>check_circle</span> قبول</button>
+          <button onClick={() => onReject(excuse)} style={{ flex: 1, padding: '6px 8px', background: '#fee2e2', color: '#dc2626', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #fecaca', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:14,verticalAlign:'middle'}}>cancel</span> رفض</button>
           <button onClick={() => onMessage(excuse)} style={{ flex: 1, padding: '6px 8px', background: '#eff6ff', color: '#2563eb', borderRadius: 8, fontSize: 11, fontWeight: 700, border: '1px solid #bfdbfe', cursor: 'pointer' }}>💬 رسالة</button>
         </div>
       )}
@@ -1550,11 +1551,11 @@ const ImportDropdown: React.FC<{ onNoor: () => void; onPlatform: () => void }> =
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(!open)} style={btnStyle('#16a34a')}>📤 استيراد ▾</button>
+      <button onClick={() => setOpen(!open)} style={btnStyle('#16a34a')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span> استيراد ▾</button>
       {open && (
         <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', borderRadius: 10, boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e5e7eb', zIndex: 50, minWidth: 200, overflow: 'hidden' }}>
-          <div onClick={() => { onNoor(); setOpen(false); }} style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}>☁️ استيراد Excel (نور)</div>
-          <div onClick={() => { onPlatform(); setOpen(false); }} style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}>📊 استيراد منصة (Excel)</div>
+          <div onClick={() => { onNoor(); setOpen(false); }} style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, borderBottom: '1px solid #f3f4f6' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>cloud</span> استيراد Excel (نور)</div>
+          <div onClick={() => { onPlatform(); setOpen(false); }} style={{ padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>bar_chart</span> استيراد منصة (Excel)</div>
         </div>
       )}
     </div>

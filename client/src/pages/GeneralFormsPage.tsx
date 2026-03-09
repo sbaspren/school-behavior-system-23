@@ -14,24 +14,24 @@ interface FormCardDef {
 interface FormCategory { title: string; icon: string; color: string; forms: FormCardDef[]; }
 
 const FORM_CATEGORIES: FormCategory[] = [
-  { title: 'المواظبة والغياب', icon: '📅', color: '#dc2626', forms: [
+  { title: 'المواظبة والغياب', icon: 'event_busy', color: '#dc2626', forms: [
     { id: 'ghiab_bidon_ozr', title: 'متابعة غياب (بدون عذر)', desc: 'سجل تدرج الإجراءات للملف', icon: '🚫', color: '#dc2626', requiresStudent: true },
-    { id: 'ghiab_ozr', title: 'إجراءات غياب (بعذر)', desc: 'توثيق الأعذار المقبولة', icon: '✅', color: '#16a34a', requiresStudent: true },
-    { id: 'tahood_hodoor', title: 'تعهد التزام بالحضور', desc: 'عند تجاوز الغياب للحد المسموح', icon: '📝', color: '#ea580c', requiresStudent: false, hasSpecialModal: true },
+    { id: 'ghiab_ozr', title: 'إجراءات غياب (بعذر)', desc: 'توثيق الأعذار المقبولة', icon: 'check_circle', color: '#16a34a', requiresStudent: true },
+    { id: 'tahood_hodoor', title: 'تعهد التزام بالحضور', desc: 'عند تجاوز الغياب للحد المسموح', icon: 'edit_note', color: '#ea580c', requiresStudent: false, hasSpecialModal: true },
   ]},
   { title: 'نماذج الإجراءات السلوكية', icon: '⚖️', color: '#4f46e5', forms: [
     { id: 'iltizam_madrasi', title: 'عقد التزام مدرسي', desc: 'يوقع بداية العام أو عند العودة', icon: '🤝', color: '#4f46e5', requiresStudent: true },
     { id: 'tawid_darajat', title: 'فرص تعويض الدرجات', desc: 'لتحسين الدرجات المحسومة', icon: '📈', color: '#7c3aed', requiresStudent: true, requiresViolation: true },
-    { id: 'rasd_tamayuz', title: 'رصد سلوك متميز', desc: 'سجل الطالب للإنجازات', icon: '⭐', color: '#059669', requiresStudent: true },
-    { id: 'dawat_wali_amr', title: 'دعوة ولي أمر', desc: 'طلب حضور للمدرسة', icon: '📨', color: '#64748b', requiresStudent: false, hasSpecialModal: true },
+    { id: 'rasd_tamayuz', title: 'رصد سلوك متميز', desc: 'سجل الطالب للإنجازات', icon: 'stars', color: '#059669', requiresStudent: true },
+    { id: 'dawat_wali_amr', title: 'دعوة ولي أمر', desc: 'طلب حضور للمدرسة', icon: 'mail', color: '#64748b', requiresStudent: false, hasSpecialModal: true },
     { id: 'rasd_slooki', title: 'سجل مخالفات (للملف)', desc: 'يوضع في ملف الطالب', icon: '📁', color: '#64748b', requiresStudent: true },
     { id: 'khota_tadeel', title: 'خطة تعديل سلوك', desc: 'للموجه الطلابي', icon: '🧠', color: '#0d9488', requiresStudent: false, hasSpecialModal: true },
-    { id: 'mahdar_dab_wakea', title: 'محضر ضبط واقعة', desc: 'لتوثيق المخالفة', icon: '📋', color: '#b45309', requiresStudent: false, hasSpecialModal: true },
-    { id: 'tawtheeq_tawasol', title: 'توثيق تواصل ولي أمر', desc: 'تسجيل التواصل مع ولي الأمر', icon: '📞', color: '#0891b2', requiresStudent: false, hasSpecialModal: true },
+    { id: 'mahdar_dab_wakea', title: 'محضر ضبط واقعة', desc: 'لتوثيق المخالفة', icon: 'assignment', color: '#b45309', requiresStudent: false, hasSpecialModal: true },
+    { id: 'tawtheeq_tawasol', title: 'توثيق تواصل ولي أمر', desc: 'تسجيل التواصل مع ولي الأمر', icon: 'contact_phone', color: '#0891b2', requiresStudent: false, hasSpecialModal: true },
   ]},
-  { title: 'المحاضر واللجان', icon: '👥', color: '#d97706', forms: [
-    { id: 'mahdar_lajnah', title: 'محضر لجنة توجيه (مخالفة)', desc: 'لدراسة مخالفة سلوكية', icon: '👥', color: '#d97706', requiresStudent: false, hasSpecialModal: true },
-    { id: 'mahdar_lajnah_absence', title: 'محضر لجنة توجيه (غياب)', desc: 'لدراسة حالة غياب', icon: '👥', color: '#d97706', requiresStudent: false, hasSpecialModal: true },
+  { title: 'المحاضر واللجان', icon: 'groups', color: '#d97706', forms: [
+    { id: 'mahdar_lajnah', title: 'محضر لجنة توجيه (مخالفة)', desc: 'لدراسة مخالفة سلوكية', icon: 'groups', color: '#d97706', requiresStudent: false, hasSpecialModal: true },
+    { id: 'mahdar_lajnah_absence', title: 'محضر لجنة توجيه (غياب)', desc: 'لدراسة حالة غياب', icon: 'groups', color: '#d97706', requiresStudent: false, hasSpecialModal: true },
   ]},
   { title: 'نماذج فارغة للتوزيع', icon: '📄', color: '#7c3aed', forms: [
     { id: 'rasd_moalem', title: 'سجل متابعة معلم', desc: 'طباعة فارغ أو مملوء', icon: '👨‍🏫', color: '#7c3aed', requiresStudent: false, hasSpecialModal: true },
@@ -197,7 +197,7 @@ const GeneralFormsPage: React.FC = () => {
             </div>
           </div>
           {selectedForm.requiresViolation && modalStudent && <div style={{ borderTop: '2px solid #e5e7eb', paddingTop: '12px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}><span>⚠️</span> اختر المخالفة</label>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}><span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>warning</span> اختر المخالفة</label>
             {loadingViolations ? <div style={{ textAlign: 'center', padding: '12px', color: '#9ca3af', fontSize: '13px' }}>جاري التحميل...</div>
               : studentViolations.length === 0 ? <div style={{ textAlign: 'center', padding: '12px', color: '#ef4444', fontSize: '13px', background: '#fef2f2', borderRadius: '100px' }}>لا توجد مخالفات</div>
               : <select value={selectedViolation?.id?.toString() || ''} onChange={e => setSelectedViolation(studentViolations.find(x => x.id === Number(e.target.value)) || null)} style={{ width: '100%', padding: '10px 12px', border: '2px solid #fed7aa', borderRadius: '10px', fontSize: '13px', background: '#fff7ed' }}><option value="">-- اختر المخالفة --</option>{studentViolations.map(v => <option key={v.id} value={v.id}>{v.hijriDate} - د{v.degree} - {v.description.length > 30 ? v.description.substring(0, 30) + '...' : v.description}</option>)}</select>}
@@ -205,7 +205,7 @@ const GeneralFormsPage: React.FC = () => {
         </div>
         <div style={{ padding: '16px 20px', background: '#f9fafb', borderTop: '2px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button onClick={() => setModalOpen(false)} style={{ padding: '8px 20px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>إلغاء</button>
-          <button onClick={handlePrint} disabled={!canPrint} style={{ padding: '8px 24px', background: canPrint ? '#4f46e5' : '#d1d5db', color: '#fff', borderRadius: '12px', fontWeight: 700, border: 'none', cursor: canPrint ? 'pointer' : 'not-allowed', opacity: canPrint ? 1 : 0.6 }}>🖨️ طباعة</button>
+          <button onClick={handlePrint} disabled={!canPrint} style={{ padding: '8px 24px', background: canPrint ? '#4f46e5' : '#d1d5db', color: '#fff', borderRadius: '12px', fontWeight: 700, border: 'none', cursor: canPrint ? 'pointer' : 'not-allowed', opacity: canPrint ? 1 : 0.6 }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
         </div>
       </div></div>}
 
@@ -248,7 +248,7 @@ const DawatM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
         <div><label style={FL}>وذلك لمقابلة</label><select value={mt} onChange={e => setMt(e.target.value)} style={FI}>{['إدارة المدرسة','وكيل المدرسة','الموجه الطلابي'].map(m => <option key={m}>{m}</option>)}</select></div>
       </div>
       <div><label style={FL}>الهدف من الزيارة</label><input type="text" value={rs} onChange={e => setRs(e.target.value)} style={FI} /></div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('dawat_wali_amr', { ...pk, visitDay: dy, visitDate: hijriFromDate(dt), visitTime: tm, visitMeeting: mt, visitReason: rs }); }} style={PB}>🖨️ طباعة الدعوة</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('dawat_wali_amr', { ...pk, visitDay: dy, visitDate: hijriFromDate(dt), visitTime: tm, visitMeeting: mt, visitReason: rs }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة الدعوة</button>
     </div>
   </div></div>;
 };
@@ -269,7 +269,7 @@ const TawtheeqM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
       <div><label style={FL}>سبب التواصل</label><input type="text" value={rs} onChange={e => setRs(e.target.value)} placeholder="مثال: لمناقشة المستوى السلوكي" style={FI} /></div>
       <div><label style={FL}>نتيجة التواصل</label><input type="text" value={rl} onChange={e => setRl(e.target.value)} style={FI} /></div>
       <div><label style={FL}>ملاحظات</label><input type="text" value={nt} onChange={e => setNt(e.target.value)} placeholder="اختياري" style={FI} /></div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('tawtheeq_tawasol', { ...pk, contactDay: dy, contactDate: hijriFromDate(dt), contactType: ct, contactReason: rs, contactResult: rl, contactNotes: nt }); }} style={PB}>🖨️ طباعة التوثيق</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('tawtheeq_tawasol', { ...pk, contactDay: dy, contactDate: hijriFromDate(dt), contactType: ct, contactReason: rs, contactResult: rl, contactNotes: nt }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة التوثيق</button>
     </div>
   </div></div>;
 };
@@ -296,7 +296,7 @@ const MahdarM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
         </div>)}
         <button onClick={() => setWs([...ws, { role: 'إداري', name: '' }])} style={{ padding: '6px 14px', border: '1.5px dashed #6366f1', borderRadius: '10px', background: '#fff', color: '#4f46e5', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>+ إضافة شاهد</button>
       </div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } const obs: string[] = []; obsT.forEach((t, i) => { if (oc[i]) obs.push(t === 'أخرى' ? oo : t); }); onP('mahdar_dab_wakea', { ...pk, violationText: pb, mahdarLocation: loc, mahdarObservations: obs, mahdarWitnesses: ws.filter(w => w.name.trim()) }); }} style={PB}>🖨️ طباعة المحضر</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } const obs: string[] = []; obsT.forEach((t, i) => { if (oc[i]) obs.push(t === 'أخرى' ? oo : t); }); onP('mahdar_dab_wakea', { ...pk, violationText: pb, mahdarLocation: loc, mahdarObservations: obs, mahdarWitnesses: ws.filter(w => w.name.trim()) }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة المحضر</button>
     </div>
   </div></div>;
 };
@@ -314,7 +314,7 @@ const LajnahM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
       </div>
       <div><label style={FL}>الإجراءات السابقة</label><textarea value={pv} onChange={e => setPv(e.target.value)} rows={3} placeholder="١. ........" style={{ ...FI, resize: 'vertical' }} /></div>
       <div><label style={FL}>التوصيات والقرارات</label><textarea value={rc} onChange={e => setRc(e.target.value)} rows={3} placeholder="١. ........" style={{ ...FI, resize: 'vertical' }} /></div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('mahdar_lajnah', { ...pk, violationText: ds, violationDegree: dg, lajnahPrevProcedures: pv, lajnahRecommendations: rc }); }} style={PB}>🖨️ طباعة المحضر</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('mahdar_lajnah', { ...pk, violationText: ds, violationDegree: dg, lajnahPrevProcedures: pv, lajnahRecommendations: rc }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة المحضر</button>
     </div>
   </div></div>;
 };
@@ -332,7 +332,7 @@ const LajnahAbsM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
       </div>
       <div><label style={FL}>الإجراءات السابقة</label><textarea value={pv} onChange={e => setPv(e.target.value)} rows={3} style={{ ...FI, resize: 'vertical' }} /></div>
       <div><label style={FL}>التوصيات والقرارات</label><textarea value={rc} onChange={e => setRc(e.target.value)} rows={3} style={{ ...FI, resize: 'vertical' }} /></div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('mahdar_lajnah_absence', { ...pk, lajnahPrevProcedures: pv, lajnahRecommendations: rc, unexcusedDays: ue || '0', excusedDays: ex || '0' }); }} style={PB}>🖨️ طباعة المحضر</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('mahdar_lajnah_absence', { ...pk, lajnahPrevProcedures: pv, lajnahRecommendations: rc, unexcusedDays: ue || '0', excusedDays: ex || '0' }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة المحضر</button>
     </div>
   </div></div>;
 };
@@ -348,7 +348,7 @@ const TahoodM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
         <div><label style={FL}>أيام بدون عذر</label><input type="text" value={ue} onChange={e => setUe(e.target.value)} placeholder="5" style={FI} /></div>
         <div><label style={FL}>أيام بعذر</label><input type="text" value={ex} onChange={e => setEx(e.target.value)} placeholder="3" style={FI} /></div>
       </div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('tahood_hodoor', { ...pk, unexcusedDays: ue || '0', excusedDays: ex || '0' }); }} style={PB}>🖨️ طباعة التعهد</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('tahood_hodoor', { ...pk, unexcusedDays: ue || '0', excusedDays: ex || '0' }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة التعهد</button>
     </div>
   </div></div>;
 };
@@ -373,7 +373,7 @@ const HighRiskM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
         <div><label style={FL}>التاريخ</label><input type="date" value={dt} onChange={e => setDt(e.target.value)} style={FI} /></div>
         <div><label style={FL}>الوقت</label><select value={tm} onChange={e => setTm(e.target.value)} style={FI}>{['٧:٠٠','٧:٣٠','٨:٠٠','٨:٣٠','٩:٠٠','٩:٣٠','١٠:٠٠','١٠:٣٠','١١:٠٠','١١:٣٠','١٢:٠٠','١٢:٣٠','١:٠٠'].map(t => <option key={t}>{t}</option>)}</select></div>
       </div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } const types: string[] = []; rts.forEach((t, i) => { if (rc[i]) types.push(t); }); if (oth && ot) types.push(ot); onP('high_risk', { ...pk, riskTypes: types, riskDesc: ds, riskObserver: ob, riskDate: hijriFromDate(dt), riskTime: tm }); }} style={PB}>🖨️ طباعة النموذج</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } const types: string[] = []; rts.forEach((t, i) => { if (rc[i]) types.push(t); }); if (oth && ot) types.push(ot); onP('high_risk', { ...pk, riskTypes: types, riskDesc: ds, riskObserver: ob, riskDate: hijriFromDate(dt), riskTime: tm }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة النموذج</button>
     </div>
   </div></div>;
 };
@@ -394,7 +394,7 @@ const EblaghM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
       <div><label style={FL}>الإجراء الأول</label><input type="text" value={p1} onChange={e => setP1(e.target.value)} style={FI} /></div>
       <div><label style={FL}>الإجراء الثاني</label><input type="text" value={p2} onChange={e => setP2(e.target.value)} placeholder="اختياري" style={FI} /></div>
       <div><label style={FL}>الإجراء الثالث</label><input type="text" value={p3} onChange={e => setP3(e.target.value)} placeholder="اختياري" style={FI} /></div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('eblagh_etha', { ...pk, eblaghReporter: rp, eblaghRole: rl, eblaghSummary: sm, eblaghProcedures: [p1, p2, p3].filter(p => p.trim()) }); }} style={PB}>🖨️ طباعة النموذج</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('eblagh_etha', { ...pk, eblaghReporter: rp, eblaghRole: rl, eblaghSummary: sm, eblaghProcedures: [p1, p2, p3].filter(p => p.trim()) }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة النموذج</button>
     </div>
   </div></div>;
 };
@@ -424,7 +424,7 @@ const KhotaM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
       <div><label style={FL}>وصف المشكلة</label><textarea value={ds} onChange={e => setDs(e.target.value)} rows={2} style={{ ...FI, resize: 'vertical' }} /></div>
       <div><label style={FL}>المظهر السلوكي الأول</label><input type="text" value={m1} onChange={e => setM1(e.target.value)} style={FI} /></div>
       <div><label style={FL}>المظهر السلوكي الثاني</label><input type="text" value={m2} onChange={e => setM2(e.target.value)} style={FI} /></div>
-      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('khota_tadeel', { ...pk, khotaDob: hijriFromDate(db), khotaAge: ag, khotaStart: hijriFromDate(st), khotaEnd: hijriFromDate(en), khotaProblem: pb, khotaDegree: dg, khotaDesc: ds, khotaManifestations: [m1, m2].filter(m => m.trim()) }); }} style={PB}>🖨️ طباعة الخطة</button>
+      <button onClick={() => { if (!pk) { showError('اختر طالباً'); return; } onP('khota_tadeel', { ...pk, khotaDob: hijriFromDate(db), khotaAge: ag, khotaStart: hijriFromDate(st), khotaEnd: hijriFromDate(en), khotaProblem: pb, khotaDegree: dg, khotaDesc: ds, khotaManifestations: [m1, m2].filter(m => m.trim()) }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة الخطة</button>
     </div>
   </div></div>;
 };
@@ -470,7 +470,7 @@ const MashajaraM: React.FC<MP> = ({ sts, stg, onP, onC }) => {
         <select value={a.role} onChange={e => { const n = [...au]; n[i] = { ...n[i], role: e.target.value }; setAu(n); }} style={{ padding: '8px', border: '1.5px solid #d1d5db', borderRadius: '10px', fontSize: '12px', background: '#fff' }}>{roles.map(r => <option key={r} value={r}>{r || 'الصفة'}</option>)}</select>
         <input type="text" value={a.name} onChange={e => { const n = [...au]; n[i] = { ...n[i], name: e.target.value }; setAu(n); }} placeholder="الاسم" style={{ padding: '8px', border: '1.5px solid #d1d5db', borderRadius: '10px', fontSize: '13px', background: '#f4f5f9' }} />
       </div>)}<button onClick={() => setAu([...au, { role: '', name: '' }])} style={{ padding: '4px 12px', border: '1px dashed #6366f1', borderRadius: '8px', background: '#fff', color: '#4f46e5', fontSize: '11px', cursor: 'pointer' }}>+ إضافة محرر</button></div>
-      <button onClick={() => { if (as2.length < 2) { showError('يجب إضافة طالبين على الأقل'); return; } onP('mashajara', { day: dy, date: hijriFromDate(dt), time: tm, location: lc, students: as2.map(s => ({ name: s.name, grade: s.grade })), initiator: ini, description: ds, physicalDamage: pd.filter(d => d.trim()), materialDamage: md.filter(d => d.trim()), authors: au.filter(a => a.name.trim()), authorName: au[0]?.name || '', authorRole: au[0]?.role || '' }); }} style={PB}>🖨️ طباعة المحضر</button>
+      <button onClick={() => { if (as2.length < 2) { showError('يجب إضافة طالبين على الأقل'); return; } onP('mashajara', { day: dy, date: hijriFromDate(dt), time: tm, location: lc, students: as2.map(s => ({ name: s.name, grade: s.grade })), initiator: ini, description: ds, physicalDamage: pd.filter(d => d.trim()), materialDamage: md.filter(d => d.trim()), authors: au.filter(a => a.name.trim()), authorName: au[0]?.name || '', authorRole: au[0]?.role || '' }); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة المحضر</button>
     </div>
   </div></div>;
 };
@@ -509,7 +509,7 @@ const RasdM: React.FC<{ onP: (id: FormId, d: any) => void; onC: () => void }> = 
         </div>)}
         <button onClick={() => { if (vs.length >= 12) { showError('الحد ١٢'); return; } setVs([...vs, { studentName: '', violation: '', action: '', date: '' }]); }} style={{ padding: '6px 14px', border: '1.5px dashed #7c3aed', borderRadius: '10px', background: '#fff', color: '#6d28d9', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>+ إضافة مخالفة</button>
       </div>}
-      <button onClick={() => { const d: any = { teacherName: tn, subject: sb, grade: gr }; if (md === 'filled') { const vl = vs.filter(v => v.studentName.trim() || v.violation.trim()); if (vl.length > 0) d.violations = vl; } onP('rasd_moalem', d); }} style={PB}>🖨️ طباعة النموذج</button>
+      <button onClick={() => { const d: any = { teacherName: tn, subject: sb, grade: gr }; if (md === 'filled') { const vl = vs.filter(v => v.studentName.trim() || v.violation.trim()); if (vl.length > 0) d.violations = vl; } onP('rasd_moalem', d); }} style={PB}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة النموذج</button>
     </div>
   </div></div>;
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import MI from '../components/shared/MI';
 import { violationsApi, ViolationData, RepetitionInfo } from '../api/violations';
 import { positiveBehaviorApi } from '../api/positiveBehavior';
 import { studentsApi } from '../api/students';
@@ -143,7 +144,7 @@ const ViolationsPage: React.FC = () => {
   }
 
   return (
-    <div>
+    <div className="sec-violations">
       {/* Hero Banner — مطابق لـ .page-hero في الأصلي: gradient indigo + 3 عدادات */}
       <PageHero
         title={`المخالفات السلوكية${stageName ? ' — ' + stageName : ''}`}
@@ -570,7 +571,7 @@ const TodayTab: React.FC<{
               <button onClick={handleSendWithMessage} disabled={sendingId === messageModal.id} style={{
                 padding: '8px 24px', background: '#25d366', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer',
               }}>
-                {sendingId === messageModal.id ? 'جاري الإرسال...' : '📱 إرسال'}
+                {sendingId === messageModal.id ? 'جاري الإرسال...' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال'}
               </button>
             </div>
           </div>
@@ -731,13 +732,13 @@ const ApprovedTab: React.FC<{
         </select>
         <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '2px' }}>
           <button onClick={() => setViewMode('cards')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#dc2626' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>🎴 بطاقات</button>
-          <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#dc2626' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>📋 جدول</button>
+          <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#dc2626' : '#6b7280', fontWeight: 700, fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> جدول</button>
         </div>
-        <button onClick={handlePrintArchive} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة</button>
+        <button onClick={handlePrintArchive} style={{ height: '38px', padding: '0 16px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
         <button onClick={handleSendAllUnsent} disabled={sendingAll} style={{ height: '38px', padding: '0 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px', opacity: sendingAll ? 0.6 : 1 }}>
-          {sendingAll ? '⏳ جاري...' : '📱 إرسال الكل'}
+          {sendingAll ? 'جاري الإرسال...' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال الكل'}
         </button>
-        <button onClick={handlePrintContactReport} style={{ height: '38px', padding: '0 16px', background: '#0d9488', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📞 تقرير التواصل</button>
+        <button onClick={handlePrintContactReport} style={{ height: '38px', padding: '0 16px', background: '#0d9488', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>contact_phone</span> تقرير التواصل</button>
       </div>
 
       {/* Quick Degree Filter Buttons */}
@@ -776,7 +777,7 @@ const ApprovedTab: React.FC<{
 
       {studentGroups.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px 20px', color: '#9ca3af' }}>
-          <p style={{ fontSize: '48px' }}>📋</p>
+          <p style={{ fontSize: '48px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span></p>
           <p style={{ fontSize: '18px', fontWeight: 500 }}>لا توجد مخالفات تراكمية</p>
         </div>
       ) : viewMode === 'cards' ? (
@@ -810,7 +811,7 @@ const ApprovedTab: React.FC<{
                   {(() => { const unsent = vList.filter((v) => !v.isSent).length; return unsent > 0 ? (
                     <button onClick={(e) => { e.stopPropagation(); handleSendStudentCard(student.studentId); }}
                       style={{ padding: '2px 8px', borderRadius: '100px', fontSize: '12px', background: '#dcfce7', color: '#15803d', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                      📱 إرسال ({unsent})
+                      <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال ({unsent})
                     </button>
                   ) : null; })()}
                   {[1, 2, 3, 4, 5].map((d) => {
@@ -897,7 +898,7 @@ const ApprovedTab: React.FC<{
             <span style={{ fontSize: '14px', color: '#d1d5db' }}>مخالفة محددة</span>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleBulkSendWhatsApp} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>📱 واتساب</button>
+            <button onClick={handleBulkSendWhatsApp} style={{ padding: '6px 16px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> واتساب</button>
             <button onClick={() => setBulkSelected(new Set())} style={{ padding: '6px 12px', background: '#374151', color: '#d1d5db', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px' }}>✕</button>
           </div>
         </div>
@@ -976,8 +977,8 @@ const StudentDetailModal: React.FC<{
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button onClick={handleSendAll} style={{ padding: '6px 12px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>📱 إرسال الكل</button>
-            <button onClick={handlePrintAll} style={{ padding: '6px 12px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}>🖨️ طباعة</button>
+            <button onClick={handleSendAll} style={{ padding: '6px 12px', background: '#25d366', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> إرسال الكل</button>
+            <button onClick={handlePrintAll} style={{ padding: '6px 12px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة</button>
             <button onClick={onClose} style={{ padding: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}>✕</button>
           </div>
         </div>
@@ -1020,7 +1021,7 @@ const StudentDetailModal: React.FC<{
                     <td><span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 700, background: deg.bg, color: deg.color }}>{deg.label}</span></td>
                     <td style={{ fontWeight: 700, color: '#dc2626' }}>{v.deduction > 0 ? `-${v.deduction}` : '-'}</td>
                     <td style={{ fontSize: '12px', color: '#6b7280' }}>{v.procedures}</td>
-                    <td>{v.isSent ? <span style={{ color: '#15803d' }}>✅</span> : <span style={{ color: '#9ca3af' }}>—</span>}</td>
+                    <td>{v.isSent ? <span style={{ color: '#15803d' }}><span className="material-symbols-outlined" style={{fontSize:16,color:'#15803d'}}>check_circle</span></span> : <span style={{ color: '#9ca3af' }}>—</span>}</td>
                   </tr>
                 );
               })}
@@ -1138,7 +1139,7 @@ const PositiveTab: React.FC<{ stageFilter: string }> = ({ stageFilter }) => {
         </select>
         <div style={{ display: 'flex', gap: '4px', background: '#f3f4f6', borderRadius: '8px', padding: '2px' }}>
           <button onClick={() => setViewMode('cards')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'cards' ? '#fff' : 'transparent', color: viewMode === 'cards' ? '#059669' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>🎴 بطاقات</button>
-          <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#059669' : '#6b7280', fontWeight: 700, fontSize: '13px' }}>📋 جدول</button>
+          <button onClick={() => setViewMode('table')} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: viewMode === 'table' ? '#fff' : 'transparent', color: viewMode === 'table' ? '#059669' : '#6b7280', fontWeight: 700, fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> جدول</button>
         </div>
         <button onClick={() => {
           if (filtered.length === 0) return;
@@ -1153,7 +1154,7 @@ const PositiveTab: React.FC<{ stageFilter: string }> = ({ stageFilter }) => {
           win.document.close();
           setTimeout(() => win.print(), 300);
         }} style={{ padding: '6px 12px', background: '#059669', color: '#fff', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>
-          🖨️ طباعة
+          <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة
         </button>
       </div>
 
@@ -1635,7 +1636,7 @@ const ReportsTab: React.FC<{
             <input type="date" value={repDateTo} onChange={(e) => setRepDateTo(e.target.value)}
               style={{ height: '38px', padding: '0 12px', border: '2px solid #d1d5db', borderRadius: '10px', fontSize: '14px' }} />
           </div>
-          <button onClick={handlePrintReport} style={{ height: '38px', padding: '0 20px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>🖨️ طباعة التقرير</button>
+          <button onClick={handlePrintReport} style={{ height: '38px', padding: '0 20px', background: '#4f46e5', color: '#fff', borderRadius: '8px', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة التقرير</button>
         </div>
       </div>
 
@@ -1826,7 +1827,7 @@ const DawatModal: React.FC<{ violation: ViolationRow; onClose: () => void }> = (
         </div>
         <div style={{ padding: '16px 20px', background: '#f9fafb', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button onClick={onClose} style={{ padding: '8px 16px', color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer' }}>إلغاء</button>
-          <button onClick={handlePrint} style={{ padding: '8px 24px', background: '#d97706', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>🖨️ طباعة الدعوة</button>
+          <button onClick={handlePrint} style={{ padding: '8px 24px', background: '#d97706', color: '#fff', borderRadius: '8px', fontWeight: 700, border: 'none', cursor: 'pointer' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة الدعوة</button>
         </div>
       </div>
     </div>
@@ -2020,7 +2021,7 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
               flex: 1, padding: '8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
               background: batchMode ? '#fff' : 'transparent', color: batchMode ? '#dc2626' : '#6b7280',
               fontWeight: 700, fontSize: '13px', boxShadow: batchMode ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            }}>👥 عدة طلاب</button>
+            }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>groups</span> عدة طلاب</button>
           </div>
 
           {/* Student Selection */}
@@ -2175,7 +2176,7 @@ const AddViolationModal: React.FC<AddViolationModalProps> = ({ stages, onClose, 
           )}
           {batchMode && selectedStudents.length > 1 && (
             <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '10px 16px', border: '1px solid #bfdbfe', fontSize: '13px', color: '#1e40af' }}>
-              👥 تم اختيار <strong>{selectedStudents.length}</strong> طالب — سيتم حساب مستوى التكرار لكل طالب تلقائياً عند الحفظ
+              <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>groups</span> تم اختيار <strong>{selectedStudents.length}</strong> طالب — سيتم حساب مستوى التكرار لكل طالب تلقائياً عند الحفظ
             </div>
           )}
 

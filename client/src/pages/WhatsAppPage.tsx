@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import MI from '../components/shared/MI';
 import toast from 'react-hot-toast';
 import { whatsappApi } from '../api/whatsapp';
 
@@ -588,10 +589,10 @@ const WhatsAppPage: React.FC = () => {
                 )}
                 <div style={{ marginTop: '24px', display: 'grid', gap: '12px' }}>
                   <button onClick={() => setMainView('qr-verify')} style={{ ...btnStyle('#25d366', '#fff'), width: '100%' }}>
-                    📱 تغيير الرقم الرئيسي
+                    <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> تغيير الرقم الرئيسي
                   </button>
                   <button onClick={() => loadStatus()} style={{ ...btnStyle('#f3f4f6', '#374151'), width: '100%' }}>
-                    🔄 تحديث الحالة
+                    <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث الحالة
                   </button>
                 </div>
               </div>
@@ -617,7 +618,7 @@ const WhatsAppPage: React.FC = () => {
                   </div>
                   <button onClick={handleVerifyAndOpenQR} disabled={actionLoading} style={{
                     ...btnStyle('#25d366', '#fff'), width: '100%', opacity: actionLoading ? 0.6 : 1,
-                  }}>📱 ربط الرقم الرئيسي</button>
+                  }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> ربط الرقم الرئيسي</button>
                 </div>
                 <button onClick={handleShowRecovery} style={{ background: 'none', border: 'none', color: '#25d366', fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}>
                   نسيت رمز الأمان؟
@@ -628,7 +629,7 @@ const WhatsAppPage: React.FC = () => {
             {/* ★ QR Verify (change primary) — مطابق showAddNewPhoneForm سطر 673-705 */}
             {mainView === 'qr-verify' && (
               <div style={{ textAlign: 'center', width: '100%' }}>
-                <IconCircle emoji="🔄" bg="#fffbeb" />
+                <IconCircle emoji="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span>" bg="#fffbeb" />
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>تغيير الرقم الرئيسي</h3>
                 <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>الرقم الجديد سيصبح الرقم الرئيسي لـ {stageInfo.label}</p>
                 <div style={{ background: '#f9fafb', borderRadius: '12px', padding: '16px', marginBottom: '12px' }}>
@@ -640,7 +641,7 @@ const WhatsAppPage: React.FC = () => {
                   </div>
                   <button onClick={handleVerifyAndOpenQR} disabled={actionLoading} style={{
                     ...btnStyle('#25d366', '#fff'), width: '100%', opacity: actionLoading ? 0.6 : 1,
-                  }}>📱 مسح باركود جديد</button>
+                  }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> مسح باركود جديد</button>
                 </div>
                 <button onClick={() => setMainView('connected')} style={{ ...btnStyle('#f3f4f6', '#374151'), width: '100%' }}>إلغاء</button>
               </div>
@@ -656,7 +657,7 @@ const WhatsAppPage: React.FC = () => {
                         <img src={qrImage} alt="QR Code" style={{ width: '260px', height: '260px', imageRendering: 'pixelated', display: 'block' }} />
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '12px', color: '#15803d' }}>
-                        <span style={{ fontSize: '16px' }}>📱</span>
+                        <span style={{ fontSize: '16px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span></span>
                         <span style={{ fontSize: '13px', fontWeight: 700 }}>امسح الباركود من واتساب</span>
                       </div>
                       <p style={{ fontSize: '11px', color: '#16a34a', margin: '4px 0 0' }}>الإعدادات ← الأجهزة المرتبطة ← ربط جهاز</p>
@@ -676,7 +677,7 @@ const WhatsAppPage: React.FC = () => {
             {/* ★ QR Success — مطابق showQRSuccess سطر 490-513 */}
             {mainView === 'qr-success' && (
               <div style={{ textAlign: 'center', width: '100%' }}>
-                <IconCircle emoji="📞" bg="#dcfce7" size={80} border="#86efac" />
+                <IconCircle emoji="<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>contact_phone</span>" bg="#dcfce7" size={80} border="#86efac" />
                 <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>متصل بنجاح!</h3>
                 <div style={{ background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '16px', padding: '20px', display: 'inline-block', marginBottom: '16px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 800, direction: 'ltr' as const, marginBottom: '4px' }}>{qrConnectedPhone}</div>
@@ -761,7 +762,7 @@ const WhatsAppPage: React.FC = () => {
        !['qr-scan', 'qr-success', 'security-setup'].includes(mainView) && (
         <div style={{ marginTop: '24px', background: '#fff', borderRadius: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb', padding: '24px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📱 أرقام {stageInfo.label}
+            <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>smartphone</span> أرقام {stageInfo.label}
           </h3>
           <div style={{ display: 'grid', gap: '12px' }}>
             {(status.allSessions || status.sessions || []).map((session: any, i: number) => {
@@ -803,7 +804,7 @@ const WhatsAppPage: React.FC = () => {
                     )}
                     {session.id && (
                       <button onClick={() => handleDeletePhone(session.id, session.phone || session.phoneNumber)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px', color: '#dc2626' }} title="حذف">🗑️</button>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px', color: '#dc2626' }} title="حذف"><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span></button>
                     )}
                   </div>
                 </div>
@@ -817,7 +818,7 @@ const WhatsAppPage: React.FC = () => {
       {stats && mainView === 'connected' && (
         <div style={{ marginTop: '24px', background: '#fff', borderRadius: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb', padding: '24px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📊 إحصائيات الإرسال - {stageInfo.label}
+            <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>bar_chart</span> إحصائيات الإرسال - {stageInfo.label}
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
             <StatCard label="أرقام متصلة" value={stats.connectedPhones} color="#2563eb" bg="#eff6ff" />

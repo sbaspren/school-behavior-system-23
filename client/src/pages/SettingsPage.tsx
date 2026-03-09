@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import MI from '../components/shared/MI';
 import { settingsApi, SchoolSettingsData, StageConfigData, StructureData } from '../api/settings';
 import { showSuccess, showError } from '../components/shared/Toast';
 import { SETTINGS_STAGES, SECONDARY_TRACKS, CLASS_LETTERS } from '../utils/constants';
@@ -14,7 +15,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'structure', label: 'هيكل الصفوف', icon: '🏗️' },
   { id: 'admins', label: 'الهيئة الإدارية', icon: '👤' },
   { id: 'teachers', label: 'المعلمين', icon: '👨‍🏫' },
-  { id: 'students', label: 'الطلاب', icon: '👥' },
+  { id: 'students', label: 'الطلاب', icon: 'groups' },
   { id: 'links', label: 'روابط النماذج', icon: '🔗' },
 ];
 
@@ -182,7 +183,7 @@ const SchoolTab: React.FC<SchoolTabProps> = ({ data, onChange, onSaved }) => {
             border: '1px solid #fde68a', borderRadius: '12px',
             fontSize: '14px', fontWeight: 700, cursor: 'pointer',
           }}>
-            ✏️ تعديل البيانات
+            <span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>edit</span> تعديل البيانات
           </button>
         )}
       </div>
@@ -214,7 +215,7 @@ const SchoolTab: React.FC<SchoolTabProps> = ({ data, onChange, onSaved }) => {
           {/* Letterhead Mode */}
           <div style={{ background: 'linear-gradient(to left, #eef2ff, #faf5ff)', borderRadius: '16px', padding: '20px', border: '1px solid #c7d2fe', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <span>🖨️</span>
+              <span><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span></span>
               <h4 style={{ margin: 0, fontWeight: 700, color: '#1f2937' }}>نوع الكليشة في المطبوعات</h4>
             </div>
 
@@ -617,7 +618,7 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
             maxWidth: '500px', width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-              <span style={{ fontSize: '32px' }}>⚠️</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>warning</span>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#dc2626' }}>تأكيد حذف مراحل</h3>
             </div>
 
@@ -636,7 +637,7 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
                 <div key={stage} style={{
                   display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0',
                 }}>
-                  <span style={{ color: '#dc2626' }}>🗑️</span>
+                  <span style={{ color: '#dc2626' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span></span>
                   <span style={{ fontWeight: 700, color: '#991b1b' }}>{stage}</span>
                   <span style={{ fontSize: '12px', color: '#b91c1c' }}>(طلاب + سجلات مخالفات + غياب + ...)</span>
                 </div>
@@ -668,7 +669,7 @@ const StructureTab: React.FC<StructureTabProps> = ({ stages: initialStages, scho
                 borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer',
                 opacity: saving ? 0.7 : 1,
               }}>
-                {saving ? 'جاري الحذف...' : '🗑️ تأكيد الحذف والحفظ'}
+                {saving ? 'جاري الحذف...' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span> تأكيد الحذف والحفظ'}
               </button>
             </div>
           </div>

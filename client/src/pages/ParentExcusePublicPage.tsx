@@ -73,7 +73,7 @@ const ParentExcusePublicPage: React.FC = () => {
 
   const handleExit = () => {
     try { window.close(); } catch { /* noop */ }
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;font-family:inherit;direction:rtl"><div><div style="font-size:64px;margin-bottom:16px">✅</div><h2 style="font-size:20px;font-weight:800;color:#1f2937;margin-bottom:8px">يمكنك إغلاق هذه الصفحة</h2><p style="color:#6b7280;font-size:14px">تم تسجيل العذر بنجاح</p></div></div>';
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;font-family:inherit;direction:rtl"><div><div style="font-size:64px;margin-bottom:16px"><span className="material-symbols-outlined" style={{fontSize:16,color:'#15803d'}}>check_circle</span></div><h2 style="font-size:20px;font-weight:800;color:#1f2937;margin-bottom:8px">يمكنك إغلاق هذه الصفحة</h2><p style="color:#6b7280;font-size:14px">تم تسجيل العذر بنجاح</p></div></div>';
   };
 
   // Loading screen
@@ -90,7 +90,7 @@ const ParentExcusePublicPage: React.FC = () => {
   if (error || !pageData?.success) {
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 16px', textAlign: 'center', direction: 'rtl', fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", background: '#f0fdf4' }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>❌</div>
+        <div style={{ fontSize: 64, marginBottom: 16 }}><span className="material-symbols-outlined" style={{fontSize:16,color:'#dc2626'}}>cancel</span></div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: '#1f2937', marginBottom: 8 }}>خطأ</h2>
         <p style={{ color: '#6b7280', fontSize: 14, lineHeight: 1.6, maxWidth: 320 }}>{error || pageData?.error || 'خطأ غير معروف'}</p>
       </div>
@@ -106,7 +106,7 @@ const ParentExcusePublicPage: React.FC = () => {
     return (
       <div style={{ ...styles.body, background: '#f0fdf4' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100%', padding: '32px 16px', textAlign: 'center' }}>
-          <div style={{ fontSize: 64, marginBottom: 16, animation: 'pulse 2s ease infinite' }}>✅</div>
+          <div style={{ fontSize: 64, marginBottom: 16, animation: 'pulse 2s ease infinite' }}><span className="material-symbols-outlined" style={{fontSize:16,color:'#15803d'}}>check_circle</span></div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1f2937', marginBottom: 8 }}>تم إرسال العذر بنجاح!</h2>
           <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14, lineHeight: 1.6 }}>{successMessage}</p>
           <div style={{ background: '#f0fdf4', padding: 16, borderRadius: 14, textAlign: 'right', width: '100%', maxWidth: 480, border: '2px solid #bbf7d0' }}>
@@ -168,7 +168,7 @@ const ParentExcusePublicPage: React.FC = () => {
 
           {/* Warning */}
           <div style={styles.warningBox}>
-            <span style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>⚠️</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 72, color: '#d1d5db' }}>warning</span>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', lineHeight: 1.6 }}>
               تنبيه: الطالب الذي يتجاوز غيابه <strong>18 يوم دراسي بدون عذر</strong> يُحرم من دخول الاختبارات حسب لائحة الانتظام الدراسي.
             </div>
@@ -185,7 +185,7 @@ const ParentExcusePublicPage: React.FC = () => {
 
           {/* Excuse text */}
           <div style={styles.formSection}>
-            <div style={styles.formTitle}>✏️ سبب الغياب</div>
+            <div style={styles.formTitle}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>edit</span> سبب الغياب</div>
             <div style={styles.formSubtitle}>اكتب سبب غياب ابنك بالتفصيل</div>
             <textarea value={excuseText} onChange={(e) => setExcuseText(e.target.value)} maxLength={500}
               placeholder="مثال: كان يعاني من ارتفاع في درجة الحرارة ولم يتمكن من الحضور..."
@@ -213,7 +213,7 @@ const ParentExcusePublicPage: React.FC = () => {
       {/* Submit area */}
       <div style={styles.submitArea}>
         <button onClick={handleSubmit} disabled={submitting || excuseText.trim().length < 5} style={styles.btnSubmit}>
-          {submitting ? '⏳ جاري الإرسال...' : '📤 إرسال العذر'}
+          {submitting ? '⏳ جاري الإرسال...' : '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>upload</span> إرسال العذر'}
         </button>
       </div>
 

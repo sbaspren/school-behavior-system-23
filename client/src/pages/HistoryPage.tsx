@@ -328,12 +328,12 @@ const HistoryPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '12px', borderTop: '1px solid #f3f4f6' }}>
-          <button onClick={loadData} style={actionBtnStyle('#eef2ff', '#4f46e5')}>🔄 تحديث السجل</button>
+          <button onClick={loadData} style={actionBtnStyle('#eef2ff', '#4f46e5')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>refresh</span> تحديث السجل</button>
           <button onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')} style={actionBtnStyle('#f3f4f6', '#374151')}>
-            {viewMode === 'cards' ? '📋 عرض الجدول' : '🎴 عرض البطاقات'}
+            {viewMode === 'cards' ? '<span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>assignment</span> عرض الجدول' : '🎴 عرض البطاقات'}
           </button>
-          <button onClick={handlePrint} style={actionBtnStyle('#f5f3ff', '#7c3aed')}>🖨️ طباعة القائمة</button>
-          <button onClick={clearFilters} style={actionBtnStyle('#f3f4f6', '#6b7280')}>🗑️ مسح الفلاتر</button>
+          <button onClick={handlePrint} style={actionBtnStyle('#f5f3ff', '#7c3aed')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>print</span> طباعة القائمة</button>
+          <button onClick={clearFilters} style={actionBtnStyle('#f3f4f6', '#6b7280')}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle'}}>delete</span> مسح الفلاتر</button>
           <span style={{ fontSize: '13px', color: '#6b7280', alignSelf: 'center', marginRight: 'auto' }}>
             {filteredViolations.length} مخالفة | {studentGroups.length} طالب
           </span>
@@ -490,7 +490,7 @@ const HistoryPage: React.FC = () => {
               {/* Violations List */}
               {detailGroup.violations.length > 0 && (
                 <>
-                  <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#dc2626', marginBottom: '8px' }}>⚠️ المخالفات</h4>
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#dc2626', marginBottom: '8px' }}><span className="material-symbols-outlined" style={{fontSize:16,verticalAlign:'middle',color:'#dc2626'}}>gavel</span> المخالفات</h4>
                   {detailGroup.violations.map((v) => {
                     const deg = DEGREE_LABELS[v.degree] || DEGREE_LABELS[1];
                     return (
